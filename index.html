@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Life Group Schedule</title>
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --card: #ffffff;
+    --ink: #2b2a26;
+    --muted: #7a766c;
+    --line: #e6e2d8;
+    --men: #2f6db3;
+    --men-bg: #e8f0fa;
+    --women: #b34a7d;
+    --women-bg: #f9ebf2;
+    --all: #3e8a5a;
+    --all-bg: #e9f4ed;
+    --fun: #d07a2c;
+    --fun-bg: #fbf0e3;
+    --accent: #3e8a5a;
+    --cancel: #b3402f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1b18;
+      --card: #26241f;
+      --ink: #ece9e1;
+      --muted: #a39e91;
+      --line: #3a372f;
+      --men: #7fb1e8;
+      --men-bg: #223140;
+      --women: #e493bd;
+      --women-bg: #3a2733;
+      --all: #83c49d;
+      --all-bg: #24342b;
+      --fun: #eba55f;
+      --fun-bg: #3d2f1f;
+      --accent: #83c49d;
+      --cancel: #e8897a;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.5;
+    padding: 24px 16px 48px;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 18px; }
+  header h1 { font-size: 1.9rem; font-weight: normal; letter-spacing: 0.5px; }
+  header p { color: var(--muted); font-size: 0.95rem; margin-top: 4px; }
+
+  .banner {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.8rem;
+    text-align: center;
+    color: var(--fun);
+    background: var(--fun-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px 14px;
+    margin-bottom: 16px;
+  }
+  .banner[hidden] { display: none; }
+
+  .toolbar {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+  }
+  .toolbar button {
+    font-family: inherit;
+    font-size: 0.8rem;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 16px;
+    cursor: pointer;
+  }
+  .toolbar button.active { color: var(--accent); border-color: var(--accent); }
+  #togglePast { display: none; }
+  body.has-past #togglePast { display: inline-block; }
+
+  .month {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--muted);
+    margin: 22px 4px 10px;
+  }
+  .item {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+  .item.past, .month.past { display: none; }
+  body.show-past .item.past { display: flex; opacity: 0.45; }
+  body.show-past .month.past { display: block; opacity: 0.6; }
+  .item.next {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+    position: relative;
+  }
+  .item.next::before {
+    content: "Next up";
+    position: absolute;
+    top: -9px;
+    right: 14px;
+    background: var(--accent);
+    color: var(--bg);
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.62rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 2px 10px;
+    border-radius: 999px;
+  }
+  body.editing .item { cursor: pointer; }
+  body.editing .item:hover { border-color: var(--accent); }
+  body.editing .item::after {
+    content: "✎";
+    color: var(--muted);
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.9rem;
+    margin-left: 4px;
+  }
+  .item.cancelled { opacity: 0.6; }
+  .item.cancelled .host { text-decoration: line-through; }
+  .cancel-badge {
+    display: inline-block;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.65rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--cancel);
+    margin-left: 6px;
+  }
+  .edited-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--fun);
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .rot-mark {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.8rem;
+    color: var(--fun);
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .date-chip {
+    flex-shrink: 0;
+    width: 58px;
+    text-align: center;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+  }
+  .date-chip .mon { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  .date-chip .day { font-size: 1.45rem; line-height: 1.1; }
+  .info { flex: 1; min-width: 0; }
+  .type {
+    display: inline-block;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.7rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    margin-bottom: 4px;
+  }
+  .host { font-size: 1.05rem; }
+  .lead {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.8rem;
+    color: var(--accent);
+    margin-top: 2px;
+  }
+  .note {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-style: italic;
+    margin-top: 2px;
+  }
+  .time {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .t-men { background: var(--men-bg); color: var(--men); }
+  .t-women { background: var(--women-bg); color: var(--women); }
+  .t-all { background: var(--all-bg); color: var(--all); }
+  .t-fun { background: var(--fun-bg); color: var(--fun); }
+
+  .rotation {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 20px;
+    font-size: 0.95rem;
+    color: var(--muted);
+    margin-top: 30px;
+  }
+  .rotation .rt {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+  }
+  .rotation strong { color: var(--ink); font-weight: normal; }
+  .rotation p + p { margin-top: 8px; }
+  footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 26px; font-family: 'Helvetica Neue', Arial, sans-serif; }
+
+  /* ---- Edit modal ---- */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 10;
+  }
+  .overlay[hidden] { display: none; }
+  .modal {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 20px;
+    width: 100%;
+    max-width: 420px;
+    max-height: 90vh;
+    overflow-y: auto;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+  }
+  .modal h3 { font-family: Georgia, serif; font-weight: normal; font-size: 1.25rem; margin-bottom: 14px; }
+  .modal label {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .modal input[type="text"], .modal select {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    padding: 9px 10px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    color: var(--ink);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  .modal input[hidden] { display: none; }
+  .modal .chk {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.9rem;
+    color: var(--ink);
+    margin-bottom: 8px;
+  }
+  .scopebox {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .scopebox .sb-title {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .scopebox .hint {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .mbtns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .mbtns button {
+    font-family: inherit;
+    font-size: 0.85rem;
+    padding: 9px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: none;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .mbtns button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  .mstatus { font-size: 0.8rem; color: var(--cancel); margin-top: 10px; min-height: 1.2em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Life Group</h1>
+    <p>Wednesday nights &middot; who, where &amp; when</p>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <div class="toolbar">
+    <button id="togglePast" type="button">Show past weeks</button>
+    <button id="editBtn" type="button">&#9998; Edit schedule</button>
+  </div>
+
+  <div id="schedule"></div>
+
+  <div class="rotation">
+    <div class="rt">How the rotation works</div>
+    <p>We cycle through four weeks: <strong>Men&rsquo;s night</strong>, <strong>Women&rsquo;s night</strong>, <strong>All together</strong>, then a <strong>Fun meetup</strong> out somewhere.</p>
+    <p>Hosting rotates between the <strong>Austin&rsquo;s</strong>, <strong>Havlin&rsquo;s</strong>, <strong>Smith&rsquo;s</strong>, and <strong>Johnson&rsquo;s</strong>. Fun weeks don&rsquo;t use a hosting turn &mdash; the next family up hosts the following week.</p>
+    <p>Leading rotates too: <strong>Noah A, Mitchell, Pablo &amp; Noah J</strong> on men&rsquo;s nights, <strong>Jillian, Emmalie, Haleigh &amp; Carly</strong> on women&rsquo;s nights, and the families on all-together nights. Nobody ever hosts and leads the same week &mdash; if a change would cause that, the rotation skips them to their next turn.</p>
+    <p>Anyone in the group can tap <strong>&#9998; Edit schedule</strong> above. A change can apply to <strong>just that week</strong>, or <strong>shift the whole rotation</strong> from that week forward. The &#10227; mark shows where a rotation shift starts; the orange dot marks a one-week change.</p>
+  </div>
+
+  <footer>Kicked off August 12, 2026</footer>
+</div>
+
+<!-- Edit modal -->
+<div class="overlay" id="overlay" hidden>
+  <div class="modal">
+    <h3 id="mTitle"></h3>
+    <label>Meeting type
+      <select id="mType">
+        <option value="men">Men&rsquo;s Night</option>
+        <option value="women">Women&rsquo;s Night</option>
+        <option value="all">All Together</option>
+        <option value="fun">Fun Meetup</option>
+      </select>
+    </label>
+    <label>Host / location
+      <select id="mHostSel"></select>
+      <input type="text" id="mHostCustom" placeholder="where?" hidden>
+    </label>
+    <label>Led by
+      <select id="mLeadSel"></select>
+      <input type="text" id="mLeadCustom" placeholder="who?" hidden>
+    </label>
+    <label>Time
+      <input type="text" id="mTime">
+    </label>
+    <label>Note
+      <input type="text" id="mNote" placeholder="optional — e.g. bring snacks">
+    </label>
+    <label class="chk"><input type="checkbox" id="mCancelled"> Cancelled this week</label>
+
+    <div class="scopebox">
+      <div class="sb-title">Apply this change to</div>
+      <label class="chk"><input type="radio" name="mScope" value="week" checked> Only this week</label>
+      <label class="chk"><input type="radio" name="mScope" value="rotation"> Shift the rotation from here on</label>
+      <div class="hint">&ldquo;Shift&rdquo; makes this week&rsquo;s type, host &amp; leader the new starting point &mdash; every later week re-rotates from it.</div>
+    </div>
+
+    <div class="mbtns">
+      <button id="mSave" class="primary" type="button">Save for everyone</button>
+      <button id="mReset" type="button">Reset to default</button>
+      <button id="mClose" type="button">Close</button>
+    </div>
+    <div class="mstatus" id="mStatus"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+/* =====================================================================
+   SETUP — the two things you might change:
+   1. GROUP_PIN — the code your group types to unlock editing.
+   2. firebaseConfig — from your Firebase project.
+   ===================================================================== */
+var GROUP_PIN = "2026";
+
+var firebaseConfig = {
+  apiKey: "AIzaSyA6tXNzYmPE0JRXAPJxIM6QBUAlU5XjK34",
+  authDomain: "life-group-planner.firebaseapp.com",
+  projectId: "life-group-planner",
+  storageBucket: "life-group-planner.firebasestorage.app",
+  messagingSenderId: "514375619318",
+  appId: "1:514375619318:web:c0231a0345c5912f2ad2d7"
+};
+
+/* ---- Rotation rules (the defaults everything is computed from) ---- */
+var START = [2026, 7, 12];          // first Wednesday: Aug 12, 2026
+var NUM_WEEKS = 52;
+var TYPE_ORDER = ["men", "women", "all", "fun"];
+var TYPEMETA = {
+  men:   { label: "Men’s Night",   cls: "t-men",   time: "6:30 PM" },
+  women: { label: "Women’s Night", cls: "t-women", time: "6:30 PM" },
+  all:   { label: "All Together",  cls: "t-all",   time: "6:00 PM" },
+  fun:   { label: "Fun Meetup",    cls: "t-fun",   time: "Time TBD" }
+};
+var FAMILIES = ["the Austin’s", "the Havlin’s", "the Smith’s", "the Johnson’s"];
+var MEN   = [{ n: "Noah A", f: 0 }, { n: "Mitchell", f: 1 }, { n: "Pablo", f: 2 }, { n: "Noah J", f: 3 }];
+var WOMEN = [{ n: "Jillian", f: 0 }, { n: "Emmalie", f: 2 }, { n: "Haleigh", f: 1 }, { n: "Carly", f: 3 }];
+/* Starting queue positions (chosen so nobody hosts + leads the same week) */
+var SEED = { host: 1, men: 0, women: 3, all: 0 };
+
+/* ---- State ---- */
+var overrides = {};   // per-date one-week changes   (Firestore: schedule/{date})
+var anchors = {};     // rotation shifts             (Firestore: rotation/{date})
+var baseMap = {};     // computed base week per date
+var db = null;
+var editMode = false;
+var pinOk = false;
+var currentDate = null;
+
+var $ = function (id) { return document.getElementById(id); };
+
+function pad(x) { return String(x).padStart(2, "0"); }
+function isoOf(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+function todayStr() { return isoOf(new Date()); }
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function famIdxOfHostText(t) {
+  for (var i = 0; i < 4; i++) if (t === "at " + FAMILIES[i]) return i;
+  return -1;
+}
+
+/* ---- The rotation engine ----
+   Walks week by week from the start date, advancing each rotation queue.
+   A rotation anchor at a date resets the cycle(s) from that week forward.
+   Leaders whose family is hosting that week are skipped to their next turn. */
+function rotArr(a, k) { return a.slice(k).concat(a.slice(0, k)); }
+
+function takeLeader(q, hostIdx, anchorName) {
+  var i, L;
+  if (anchorName) {
+    for (i = 0; i < q.length; i++) {
+      if (q[i].n === anchorName) { L = q.splice(i, 1)[0]; q.unshift(L); break; }
+    }
+  }
+  for (i = 0; i < q.length; i++) {
+    if (q[i].f !== hostIdx) { L = q.splice(i, 1)[0]; q.push(L); return L.n; }
+  }
+  L = q.shift(); q.push(L); return L.n;
+}
+
+function takeFamily(q, hostIdx, anchorFam) {
+  var i, f;
+  if (anchorFam !== null && anchorFam !== undefined) {
+    i = q.indexOf(anchorFam);
+    if (i > -1) { q.splice(i, 1); q.unshift(anchorFam); }
+  }
+  for (i = 0; i < q.length; i++) {
+    if (q[i] !== hostIdx) { f = q.splice(i, 1)[0]; q.push(f); return f; }
+  }
+  f = q.shift(); q.push(f); return f;
+}
+
+function computeBase() {
+  var typePos = 0;
+  var hostPos = SEED.host;
+  var menQ = rotArr(MEN.slice(), SEED.men);
+  var womenQ = rotArr(WOMEN.slice(), SEED.women);
+  var allQ = rotArr([0, 1, 2, 3], SEED.all);
+  var out = [];
+  var d = new Date(START[0], START[1], START[2]);
+  for (var i = 0; i < NUM_WEEKS; i++) {
+    var iso = isoOf(d);
+    var a = anchors[iso];
+    if (a) {
+      if (a.type && TYPE_ORDER.indexOf(a.type) > -1) typePos = TYPE_ORDER.indexOf(a.type);
+      if (typeof a.hostIdx === "number") hostPos = ((a.hostIdx % 4) + 4) % 4;
+    }
+    var type = TYPE_ORDER[typePos];
+    var w = { d: iso, t: type, anchored: !!a };
+    if (type === "fun") {
+      w.hostIdx = -1;
+      w.host = "Out somewhere!";
+      w.lead = "";
+      w.time = TYPEMETA.fun.time;
+    } else {
+      w.hostIdx = hostPos;
+      w.host = "at " + FAMILIES[hostPos];
+      w.time = TYPEMETA[type].time;
+      if (type === "men") {
+        w.lead = takeLeader(menQ, hostPos, a ? a.leadName : null);
+      } else if (type === "women") {
+        w.lead = takeLeader(womenQ, hostPos, a ? a.leadName : null);
+      } else {
+        var lf = takeFamily(allQ, hostPos, (a && typeof a.leadFam === "number") ? a.leadFam : null);
+        w.lead = FAMILIES[lf];
+      }
+      hostPos = (hostPos + 1) % 4;
+    }
+    typePos = (typePos + 1) % 4;
+    out.push(w);
+    d.setDate(d.getDate() + 7);
+  }
+  return out;
+}
+
+/* ---- Merge one-week overrides on top of the computed base ---- */
+function merged(w) {
+  var o = overrides[w.d] || {};
+  var type = o.type || w.t;
+  var meta = TYPEMETA[type];
+  return {
+    d: w.d,
+    type: type,
+    label: meta.label,
+    cls: meta.cls,
+    host: (o.host !== undefined && o.host !== "") ? o.host : (o.type && o.type !== w.t && type === "fun" ? "Out somewhere!" : w.host),
+    lead: (o.lead !== undefined) ? o.lead : (o.type && o.type !== w.t ? "" : w.lead),
+    time: (o.time !== undefined && o.time !== "") ? o.time : (o.type && o.type !== w.t ? meta.time : w.time),
+    note: o.note || "",
+    cancelled: !!o.cancelled,
+    edited: !!overrides[w.d],
+    anchored: w.anchored
+  };
+}
+
+/* ---- Render ---- */
+function render() {
+  var today = todayStr();
+  var base = computeBase();
+  baseMap = {};
+  var parts = [];
+  var lastMonth = "";
+  var next = null, anyPast = false;
+
+  for (var i = 0; i < base.length; i++) {
+    baseMap[base[i].d] = base[i];
+    var m = merged(base[i]);
+    var dt = new Date(m.d + "T12:00:00");
+    var monthLabel = dt.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    var isPast = m.d < today;
+    var isNext = !isPast && !next;
+    if (isNext) next = m.d;
+    if (isPast) anyPast = true;
+    if (monthLabel !== lastMonth) {
+      parts.push({ month: monthLabel, allPast: true });
+      lastMonth = monthLabel;
+    }
+    parts.push({ week: m, isPast: isPast, isNext: isNext, dt: dt });
+    if (!isPast) {
+      for (var j = parts.length - 1; j >= 0; j--) {
+        if (parts[j].month) { parts[j].allPast = false; break; }
+      }
+    }
+  }
+
+  var html = "";
+  for (var i = 0; i < parts.length; i++) {
+    var p = parts[i];
+    if (p.month) {
+      html += '<div class="month' + (p.allPast ? " past" : "") + '">' + esc(p.month) + '</div>';
+      continue;
+    }
+    var m = p.week;
+    var cls = "item" + (p.isPast ? " past" : "") + (p.isNext ? " next" : "") + (m.cancelled ? " cancelled" : "");
+    html += '<div class="' + cls + '" data-date="' + m.d + '">' +
+      '<div class="date-chip"><div class="mon">' + p.dt.toLocaleDateString(undefined, { month: "short" }) + '</div>' +
+      '<div class="day">' + p.dt.getDate() + '</div></div>' +
+      '<div class="info">' +
+        '<span class="type ' + m.cls + '">' + esc(m.label) + '</span>' +
+        (m.anchored ? '<span class="rot-mark" title="Rotation shifted from this week">&#10227;</span>' : "") +
+        (m.cancelled ? '<span class="cancel-badge">Cancelled</span>' : (m.edited ? '<span class="edited-dot" title="edited"></span>' : "")) +
+        '<div class="host">' + esc(m.host) + '</div>' +
+        (m.lead ? '<div class="lead">Led by ' + esc(m.lead) + '</div>' : "") +
+        (m.note ? '<div class="note">' + esc(m.note) + '</div>' : "") +
+      '</div>' +
+      '<div class="time">' + esc(m.time) + '</div>' +
+    '</div>';
+  }
+  $("schedule").innerHTML = html;
+  document.body.classList.toggle("has-past", anyPast);
+
+  var items = $("schedule").querySelectorAll(".item");
+  for (var i = 0; i < items.length; i++) {
+    items[i].addEventListener("click", function () {
+      if (editMode) openModal(this.getAttribute("data-date"));
+    });
+  }
+}
+
+/* ---- Firebase ---- */
+function connect() {
+  var banner = $("banner");
+  if (!firebaseConfig) {
+    banner.hidden = false;
+    banner.textContent = "Read-only preview — shared editing turns on once Firebase is connected.";
+    return;
+  }
+  if (typeof firebase === "undefined") {
+    banner.hidden = false;
+    banner.textContent = "Couldn’t load the database library — showing the default schedule.";
+    return;
+  }
+  try {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    db.collection("schedule").onSnapshot(function (snap) {
+      overrides = {};
+      snap.forEach(function (doc) { overrides[doc.id] = doc.data(); });
+      banner.hidden = true;
+      render();
+    }, function () {
+      banner.hidden = false;
+      banner.textContent = "Can’t reach the database right now — showing the default schedule.";
+    });
+    db.collection("rotation").onSnapshot(function (snap) {
+      anchors = {};
+      snap.forEach(function (doc) { anchors[doc.id] = doc.data(); });
+      render();
+    }, function () {});
+  } catch (e) {
+    banner.hidden = false;
+    banner.textContent = "Database connection failed — showing the default schedule.";
+  }
+}
+
+/* ---- Edit mode ---- */
+$("editBtn").addEventListener("click", function () {
+  if (!editMode) {
+    if (!pinOk) {
+      var entry = prompt("Enter the group code to edit:");
+      if (entry === null) return;
+      if (entry !== GROUP_PIN) { alert("That’s not the group code."); return; }
+      pinOk = true;
+    }
+    editMode = true;
+    this.textContent = "Done editing";
+    this.classList.add("active");
+    document.body.classList.add("editing");
+  } else {
+    editMode = false;
+    this.innerHTML = "&#9998; Edit schedule";
+    this.classList.remove("active");
+    document.body.classList.remove("editing");
+  }
+});
+
+/* ---- Modal ---- */
+function fillHostSel(currentHost) {
+  var sel = $("mHostSel");
+  var opts = "";
+  for (var i = 0; i < 4; i++) opts += '<option value="' + i + '">at ' + esc(FAMILIES[i]) + '</option>';
+  opts += '<option value="out">Out somewhere!</option>';
+  opts += '<option value="other">Other…</option>';
+  sel.innerHTML = opts;
+  var fi = famIdxOfHostText(currentHost);
+  if (fi > -1) { sel.value = String(fi); $("mHostCustom").hidden = true; }
+  else if (currentHost === "Out somewhere!") { sel.value = "out"; $("mHostCustom").hidden = true; }
+  else { sel.value = "other"; $("mHostCustom").hidden = false; $("mHostCustom").value = currentHost; }
+}
+
+function fillLeadSel(type, currentLead) {
+  var sel = $("mLeadSel");
+  var opts = "";
+  var i;
+  if (type === "men") {
+    for (i = 0; i < MEN.length; i++) opts += '<option value="' + esc(MEN[i].n) + '">' + esc(MEN[i].n) + '</option>';
+  } else if (type === "women") {
+    for (i = 0; i < WOMEN.length; i++) opts += '<option value="' + esc(WOMEN[i].n) + '">' + esc(WOMEN[i].n) + '</option>';
+  } else if (type === "all") {
+    for (i = 0; i < 4; i++) opts += '<option value="fam:' + i + '">' + esc(FAMILIES[i]) + '</option>';
+  } else {
+    var everyone = MEN.concat(WOMEN);
+    for (i = 0; i < everyone.length; i++) opts += '<option value="' + esc(everyone[i].n) + '">' + esc(everyone[i].n) + '</option>';
+  }
+  opts += '<option value="none">None</option>';
+  opts += '<option value="other">Other…</option>';
+  sel.innerHTML = opts;
+
+  var matched = false;
+  if (!currentLead) { sel.value = "none"; matched = true; }
+  else if (type === "all") {
+    for (i = 0; i < 4; i++) if (currentLead === FAMILIES[i]) { sel.value = "fam:" + i; matched = true; break; }
+  } else {
+    for (i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === currentLead) { sel.value = currentLead; matched = true; break; }
+    }
+  }
+  if (matched) { $("mLeadCustom").hidden = true; }
+  else { sel.value = "other"; $("mLeadCustom").hidden = false; $("mLeadCustom").value = currentLead; }
+}
+
+function openModal(date) {
+  currentDate = date;
+  var base = baseMap[date];
+  if (!base) return;
+  var m = merged(base);
+  var dt = new Date(date + "T12:00:00");
+  $("mTitle").textContent = "Edit " + dt.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  $("mType").value = m.type;
+  fillHostSel(m.host);
+  fillLeadSel(m.type, m.lead);
+  $("mTime").value = m.time;
+  $("mNote").value = m.note;
+  $("mCancelled").checked = m.cancelled;
+  document.querySelector('input[name="mScope"][value="week"]').checked = true;
+  $("mStatus").textContent = "";
+  $("overlay").hidden = false;
+}
+
+$("mType").addEventListener("change", function () {
+  $("mTime").value = TYPEMETA[this.value].time;
+  if (this.value === "fun") {
+    $("mHostSel").value = "out"; $("mHostCustom").hidden = true;
+    fillLeadSel("fun", "");
+  } else {
+    fillLeadSel(this.value, "");
+    var base = baseMap[currentDate];
+    if (base && base.hostIdx > -1) { $("mHostSel").value = String(base.hostIdx); $("mHostCustom").hidden = true; }
+  }
+});
+$("mHostSel").addEventListener("change", function () {
+  $("mHostCustom").hidden = this.value !== "other";
+});
+$("mLeadSel").addEventListener("change", function () {
+  $("mLeadCustom").hidden = this.value !== "other";
+});
+
+$("mClose").addEventListener("click", function () { $("overlay").hidden = true; });
+$("overlay").addEventListener("click", function (e) { if (e.target === this) this.hidden = true; });
+
+function resolveHost() {
+  var v = $("mHostSel").value;
+  if (v === "out") return { text: "Out somewhere!", famIdx: -1 };
+  if (v === "other") return { text: $("mHostCustom").value.trim() || "TBD", famIdx: -1 };
+  return { text: "at " + FAMILIES[+v], famIdx: +v };
+}
+function resolveLead(type) {
+  var v = $("mLeadSel").value;
+  if (v === "none") return { text: "", known: false, famIdx: -1 };
+  if (v === "other") return { text: $("mLeadCustom").value.trim(), known: false, famIdx: -1 };
+  if (type === "all" && v.indexOf("fam:") === 0) {
+    var fi = +v.slice(4);
+    return { text: FAMILIES[fi], known: true, famIdx: fi };
+  }
+  var pool = MEN.concat(WOMEN);
+  for (var i = 0; i < pool.length; i++) {
+    if (pool[i].n === v) return { text: v, known: true, famIdx: pool[i].f };
+  }
+  return { text: v, known: false, famIdx: -1 };
+}
+
+$("mSave").addEventListener("click", function () {
+  if (!db) { $("mStatus").textContent = "Not connected to the database — changes can’t be saved yet."; return; }
+  var scope = document.querySelector('input[name="mScope"]:checked').value;
+  var type = $("mType").value;
+  var host = resolveHost();
+  var lead = resolveLead(type);
+  var time = $("mTime").value.trim();
+  var note = $("mNote").value.trim();
+  var cancelled = $("mCancelled").checked;
+
+  if (type !== "fun" && host.famIdx > -1 && lead.famIdx > -1 && host.famIdx === lead.famIdx) {
+    $("mStatus").textContent = "That leader’s family is hosting that night — pick a different leader or host.";
+    return;
+  }
+
+  $("mStatus").textContent = "Saving…";
+  var writes = [];
+
+  if (scope === "week") {
+    writes.push(db.collection("schedule").doc(currentDate).set({
+      type: type, host: host.text, lead: lead.text, time: time, note: note, cancelled: cancelled
+    }));
+  } else {
+    var anchor = { type: type };
+    if (type !== "fun" && host.famIdx > -1) anchor.hostIdx = host.famIdx;
+    if (type === "all" && lead.famIdx > -1) anchor.leadFam = lead.famIdx;
+    else if ((type === "men" || type === "women") && lead.known) anchor.leadName = lead.text;
+    writes.push(db.collection("rotation").doc(currentDate).set(anchor));
+
+    var extras = {};
+    if (cancelled) extras.cancelled = true;
+    if (note) extras.note = note;
+    if (time && time !== TYPEMETA[type].time) extras.time = time;
+    if (type !== "fun" && host.famIdx === -1) extras.host = host.text;
+    if (!lead.known && lead.text) extras.lead = lead.text;
+    if (type !== "fun" && $("mLeadSel").value === "none") extras.lead = "";
+    if (Object.keys(extras).length) {
+      writes.push(db.collection("schedule").doc(currentDate).set(extras));
+    } else {
+      writes.push(db.collection("schedule").doc(currentDate).delete());
+    }
+  }
+
+  Promise.all(writes).then(function () {
+    $("overlay").hidden = true;
+  }).catch(function (err) {
+    $("mStatus").textContent = "Couldn’t save: " + err.message;
+  });
+});
+
+$("mReset").addEventListener("click", function () {
+  if (!db) { $("mStatus").textContent = "Not connected to the database — changes can’t be saved yet."; return; }
+  $("mStatus").textContent = "Resetting…";
+  Promise.all([
+    db.collection("schedule").doc(currentDate).delete(),
+    db.collection("rotation").doc(currentDate).delete()
+  ]).then(function () {
+    $("overlay").hidden = true;
+  }).catch(function (err) {
+    $("mStatus").textContent = "Couldn’t reset: " + err.message;
+  });
+});
+
+/* ---- Past-weeks toggle ---- */
+$("togglePast").addEventListener("click", function () {
+  var on = document.body.classList.toggle("show-past");
+  this.textContent = on ? "Hide past weeks" : "Show past weeks";
+});
+
+/* ---- Go ---- */
+render();
+connect();
+var nextEl = document.querySelector(".item.next");
+if (nextEl) nextEl.scrollIntoView({ block: "center" });
+</script>
+</body>
+</html>
