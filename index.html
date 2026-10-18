@@ -19,6 +19,8 @@
     --all-bg: #e9f4ed;
     --fun: #d07a2c;
     --fun-bg: #fbf0e3;
+    --event: #6b4fb3;
+    --event-bg: #efeafa;
     --accent: #3e8a5a;
     --cancel: #b3402f;
   }
@@ -37,6 +39,8 @@
       --all-bg: #24342b;
       --fun: #eba55f;
       --fun-bg: #3d2f1f;
+      --event: #b7a2ec;
+      --event-bg: #2f2a40;
       --accent: #83c49d;
       --cancel: #e8897a;
     }
@@ -224,6 +228,11 @@
   .t-women { background: var(--women-bg); color: var(--women); }
   .t-all { background: var(--all-bg); color: var(--all); }
   .t-fun { background: var(--fun-bg); color: var(--fun); }
+  .t-event { background: var(--event-bg); color: var(--event); }
+  .item.event { border-left: 4px solid var(--event); }
+  .date-chip .wd { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 1px; color: var(--event); }
+  #addEventBtn { display: none; }
+  body.editing #addEventBtn { display: inline-block; color: var(--event); border-color: var(--event); }
 
   .tabs {
     display: flex;
@@ -345,7 +354,7 @@
     color: var(--muted);
     margin-bottom: 12px;
   }
-  .modal input[type="text"], .modal select {
+  .modal input[type="text"], .modal input[type="date"], .modal select {
     display: block;
     width: 100%;
     margin-top: 4px;
@@ -420,6 +429,7 @@
   <div class="toolbar">
     <button id="togglePast" type="button">Show past weeks</button>
     <button id="editBtn" type="button">&#9998; Edit schedule</button>
+    <button id="addEventBtn" type="button">+ Add event</button>
   </div>
 
   <div id="schedule"></div>
@@ -430,6 +440,7 @@
     <p>Hosting rotates between the <strong>Austin&rsquo;s</strong>, <strong>Havlin&rsquo;s</strong>, <strong>Smith&rsquo;s</strong>, and <strong>Johnson&rsquo;s</strong>. Fun weeks don&rsquo;t use a hosting turn &mdash; the next family up hosts the following week.</p>
     <p>Leading rotates too: <strong>Noah A, Mitchell, Pablo &amp; Noah J</strong> on men&rsquo;s nights, <strong>Jillian, Emmalie, Haleigh &amp; Carly</strong> on women&rsquo;s nights, and the families on all-together nights. Nobody ever hosts and leads the same week &mdash; if a change would cause that, the rotation skips them to their next turn.</p>
     <p>Anyone can tap <strong>&#9998; Edit schedule</strong> above to make changes &mdash; they save for everyone. A change can apply to <strong>just that week</strong>, or <strong>shift the whole rotation</strong> from that week forward. The &#10227; mark shows where a rotation shift starts; the orange dot marks a one-week change.</p>
+    <p>Planning something extra together? While editing, tap <strong>+ Add event</strong> to put a one-off <strong>event</strong> on the schedule &mdash; any day of the week.</p>
   </div>
   </div>
 
@@ -494,6 +505,34 @@
   </div>
 </div>
 
+<!-- Event modal -->
+<div class="overlay" id="evOverlay" hidden>
+  <div class="modal">
+    <h3 id="evTitle">New event</h3>
+    <label>What
+      <input type="text" id="evName" placeholder="e.g. Christmas party">
+    </label>
+    <label>Date
+      <input type="date" id="evDate">
+    </label>
+    <label>Time
+      <input type="text" id="evTime" placeholder="optional — e.g. 6:00 PM">
+    </label>
+    <label>Where
+      <input type="text" id="evPlace" placeholder="optional — place or address">
+    </label>
+    <label>Note
+      <input type="text" id="evNote" placeholder="optional — e.g. bring a side dish">
+    </label>
+    <div class="mbtns">
+      <button id="evSave" class="primary" type="button">Save for everyone</button>
+      <button id="evDelete" type="button">Delete event</button>
+      <button id="evClose" type="button">Close</button>
+    </div>
+    <div class="mstatus" id="evStatus"></div>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
@@ -534,6 +573,8 @@ var SEED = { host: 1, men: 0, women: 3, all: 0 };
 /* ---- State ---- */
 var overrides = {};   // per-date one-week changes   (Firestore: schedule/{date})
 var anchors = {};     // rotation shifts             (Firestore: rotation/{date})
+var events = {};      // one-off events by doc id    (Firestore: events/{autoId})
+var currentEventId = null;
 var baseMap = {};     // computed base week per date
 var db = null;
 var editMode = false;
@@ -661,28 +702,49 @@ function merged(w) {
 }
 
 /* ---- Render ---- */
+function isIsoDate(x) { return typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x); }
+
+/* Rough minutes-after-midnight for ordering same-day events; unknown times sort last. */
+function timeKey(t) {
+  var m = /(\d{1,2})(?::(\d{2}))?\s*([ap])?/i.exec(t || "");
+  if (!m) return 9999;
+  var h = +m[1] % 12, ap = (m[3] || "p").toLowerCase();
+  return (ap === "p" ? h + 12 : h) * 60 + (+m[2] || 0);
+}
+
 function render() {
   var today = todayStr();
   var base = computeBase();
   baseMap = {};
+  var entries = [];
+  var i;
+  for (i = 0; i < base.length; i++) {
+    baseMap[base[i].d] = base[i];
+    entries.push({ d: base[i].d, k: 0, week: merged(base[i]) });
+  }
+  for (var id in events) {
+    if (events.hasOwnProperty(id) && isIsoDate(events[id].date)) {
+      entries.push({ d: events[id].date, k: 1 + timeKey(events[id].time), id: id, ev: events[id] });
+    }
+  }
+  entries.sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : a.k - b.k; });
+
   var parts = [];
   var lastMonth = "";
   var next = null, anyPast = false;
-
-  for (var i = 0; i < base.length; i++) {
-    baseMap[base[i].d] = base[i];
-    var m = merged(base[i]);
-    var dt = new Date(m.d + "T12:00:00");
+  for (i = 0; i < entries.length; i++) {
+    var e = entries[i];
+    var dt = new Date(e.d + "T12:00:00");
     var monthLabel = dt.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-    var isPast = m.d < today;
-    var isNext = !isPast && !next;
-    if (isNext) next = m.d;
+    var isPast = e.d < today;
+    var isNext = !isPast && !next && !!e.week;
+    if (isNext) next = e.d;
     if (isPast) anyPast = true;
     if (monthLabel !== lastMonth) {
       parts.push({ month: monthLabel, allPast: true });
       lastMonth = monthLabel;
     }
-    parts.push({ week: m, isPast: isPast, isNext: isNext, dt: dt });
+    parts.push({ entry: e, isPast: isPast, isNext: isNext, dt: dt });
     if (!isPast) {
       for (var j = parts.length - 1; j >= 0; j--) {
         if (parts[j].month) { parts[j].allPast = false; break; }
@@ -691,17 +753,37 @@ function render() {
   }
 
   var html = "";
-  for (var i = 0; i < parts.length; i++) {
+  for (i = 0; i < parts.length; i++) {
     var p = parts[i];
     if (p.month) {
       html += '<div class="month' + (p.allPast ? " past" : "") + '">' + esc(p.month) + '</div>';
       continue;
     }
-    var m = p.week;
+    var chip = '<div class="date-chip">' +
+      (p.entry.ev ? '<div class="wd">' + p.dt.toLocaleDateString(undefined, { weekday: "short" }) + '</div>' : "") +
+      '<div class="mon">' + p.dt.toLocaleDateString(undefined, { month: "short" }) + '</div>' +
+      '<div class="day">' + p.dt.getDate() + '</div></div>';
+
+    if (p.entry.ev) {
+      var ev = p.entry.ev;
+      html += '<div class="item event' + (p.isPast ? " past" : "") + '" data-event="' + esc(p.entry.id) + '">' +
+        chip +
+        '<div class="info">' +
+          '<span class="type t-event">Event</span>' +
+          '<div class="host">' + esc(ev.title || "Event") + '</div>' +
+          (ev.place ? '<div class="lead">' + esc(ev.place) + '<a class="dir-btn" href="' + mapsLink(ev.place) +
+            '" target="_blank" rel="noopener">&#128205; Directions</a></div>' : "") +
+          (ev.note ? '<div class="note">' + esc(ev.note) + '</div>' : "") +
+        '</div>' +
+        '<div class="time">' + esc(ev.time || "") + '</div>' +
+      '</div>';
+      continue;
+    }
+
+    var m = p.entry.week;
     var cls = "item" + (p.isPast ? " past" : "") + (p.isNext ? " next" : "") + (m.cancelled ? " cancelled" : "");
     html += '<div class="' + cls + '" data-date="' + m.d + '">' +
-      '<div class="date-chip"><div class="mon">' + p.dt.toLocaleDateString(undefined, { month: "short" }) + '</div>' +
-      '<div class="day">' + p.dt.getDate() + '</div></div>' +
+      chip +
       '<div class="info">' +
         '<span class="type ' + m.cls + '">' + esc(m.label) + '</span>' +
         (m.anchored ? '<span class="rot-mark" title="Rotation shifted from this week">&#10227;</span>' : "") +
@@ -717,13 +799,16 @@ function render() {
   document.body.classList.toggle("has-past", anyPast);
 
   var items = $("schedule").querySelectorAll(".item");
-  for (var i = 0; i < items.length; i++) {
+  for (i = 0; i < items.length; i++) {
     items[i].addEventListener("click", function () {
-      if (editMode) openModal(this.getAttribute("data-date"));
+      if (!editMode) return;
+      var evId = this.getAttribute("data-event");
+      if (evId) openEventModal(evId);
+      else openModal(this.getAttribute("data-date"));
     });
   }
-  var links = $("schedule").querySelectorAll(".host a");
-  for (var i = 0; i < links.length; i++) {
+  var links = $("schedule").querySelectorAll(".item a");
+  for (i = 0; i < links.length; i++) {
     links[i].addEventListener("click", function (e) {
       if (editMode) e.preventDefault();   // in edit mode, taps open the editor instead
       else e.stopPropagation();
@@ -759,6 +844,11 @@ function connect() {
     db.collection("rotation").onSnapshot(function (snap) {
       anchors = {};
       snap.forEach(function (doc) { anchors[doc.id] = doc.data(); });
+      render();
+    }, function () {});
+    db.collection("events").onSnapshot(function (snap) {
+      events = {};
+      snap.forEach(function (doc) { events[doc.id] = doc.data(); });
       render();
     }, function () {});
     trackViews();
@@ -1021,6 +1111,57 @@ $("mReset").addEventListener("click", function () {
   }).catch(function (err) {
     $("mStatus").textContent = "Couldn’t reset: " + err.message;
   });
+});
+
+/* ---- One-off events ---- */
+function openEventModal(id) {
+  currentEventId = id || null;
+  var ev = (id && events[id]) || {};
+  $("evTitle").textContent = id ? "Edit event" : "New event";
+  $("evName").value = ev.title || "";
+  $("evDate").value = ev.date || "";
+  $("evTime").value = ev.time || "";
+  $("evPlace").value = ev.place || "";
+  $("evNote").value = ev.note || "";
+  $("evDelete").hidden = !id;
+  $("evStatus").textContent = "";
+  $("evOverlay").hidden = false;
+}
+function saveError(err) {
+  return /permission/i.test(err.message || "")
+    ? "The database isn’t set up for events yet — the Firestore rules need updating."
+    : "Couldn’t save: " + err.message;
+}
+
+$("addEventBtn").addEventListener("click", function () { openEventModal(null); });
+$("evClose").addEventListener("click", function () { $("evOverlay").hidden = true; });
+$("evOverlay").addEventListener("click", function (e) { if (e.target === this) this.hidden = true; });
+
+$("evSave").addEventListener("click", function () {
+  if (!db) { $("evStatus").textContent = "Not connected to the database — changes can’t be saved yet."; return; }
+  var data = {
+    title: $("evName").value.trim(),
+    date: $("evDate").value,
+    time: $("evTime").value.trim(),
+    place: $("evPlace").value.trim(),
+    note: $("evNote").value.trim()
+  };
+  if (!data.title) { $("evStatus").textContent = "Give the event a name."; return; }
+  if (!isIsoDate(data.date)) { $("evStatus").textContent = "Pick a date."; return; }
+  $("evStatus").textContent = "Saving…";
+  var ref = currentEventId ? db.collection("events").doc(currentEventId) : db.collection("events").doc();
+  ref.set(data).then(function () {
+    $("evOverlay").hidden = true;
+  }).catch(function (err) { $("evStatus").textContent = saveError(err); });
+});
+
+$("evDelete").addEventListener("click", function () {
+  if (!db || !currentEventId) return;
+  if (!confirm("Delete this event for everyone?")) return;
+  $("evStatus").textContent = "Deleting…";
+  db.collection("events").doc(currentEventId).delete().then(function () {
+    $("evOverlay").hidden = true;
+  }).catch(function (err) { $("evStatus").textContent = saveError(err); });
 });
 
 /* ---- Tabs ---- */
