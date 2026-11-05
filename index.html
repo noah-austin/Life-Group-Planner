@@ -437,7 +437,7 @@
 
   <div class="rotation">
     <div class="rt">How the rotation works</div>
-    <p>We meet every Wednesday at <strong>6:00 PM</strong>, in a five-week cycle: <strong>Split night</strong>, <strong>All together</strong>, <strong>Split night</strong>, <strong>All together</strong>, then a <strong>Fun meetup</strong> out somewhere. On split nights the men and women meet separately in the same house.</p>
+    <p>We meet every Wednesday at <strong>6:00 PM</strong>, alternating <strong>Split nights</strong> and <strong>All together</strong> nights, with a <strong>Fun meetup</strong> out somewhere every fifth week. On split nights the men and women meet separately in the same house. After each fun week the pattern starts with the other kind of night, so everyone gets a turn at both.</p>
     <p>Hosting rotates between the <strong>Austin&rsquo;s</strong>, <strong>Havlin&rsquo;s</strong>, <strong>Smith&rsquo;s</strong>, and <strong>Johnson&rsquo;s</strong>. Leading rotates by family too &mdash; on split nights the husband leads the men and the wife leads the women. Fun weeks don&rsquo;t use a hosting or leading turn. Nobody ever hosts and leads the same week &mdash; if a change would cause that, the rotation skips them to their next turn.</p>
     <p>Anyone can tap <strong>&#9998; Edit schedule</strong> above to make changes &mdash; they save for everyone. A change can apply to <strong>just that week</strong>, or <strong>shift the whole rotation</strong> from that week forward. The &#10227; mark shows where a rotation shift starts; the orange dot marks a one-week change.</p>
     <p>Planning something extra together? While editing, tap <strong>+ Add event</strong> to put a one-off <strong>event</strong> on the schedule &mdash; any day of the week.</p>
@@ -584,13 +584,16 @@ var WOMEN = [{ n: "Jillian", f: 0 }, { n: "Emmalie", f: 2 }, { n: "Haleigh", f: 
 /* Starting queue positions (chosen so nobody hosts + leads the same week) */
 var SEED = { host: 1, men: 0, women: 3, all: 0 };
 
-/* From NEW_START on, the schedule follows the new pattern: a 5-week cycle of
-   split / together / split / together / fun, every week at 6:00 PM.
+/* From NEW_START on, the schedule follows the new pattern: split and together
+   nights alternate with a fun week every 5th week, every week at 6:00 PM.
+   Each 5-week block starts with the opposite night from the last one
+   (S T S T F | T S T S F), so with 4 families every family ends up hosting
+   and leading both kinds of night. Fun weeks use no hosting or leading turn.
    One family leads each non-fun week (on split nights the husband leads the
    men and the wife leads the women). Weeks before NEW_START keep the old
    men / women / all / fun pattern above so history doesn't change. */
 var NEW_START = "2026-11-11";
-var NEW_TYPE_ORDER = ["split", "all", "split", "all", "fun"];
+var NEW_TYPE_ORDER = ["split", "all", "split", "all", "fun", "all", "split", "all", "split", "fun"];
 var NEW_SEED = { host: 0, lead: 3 };   // Austin's host first, Johnson's lead first
 
 /* ---- State ---- */
@@ -620,6 +623,15 @@ function mapsLink(addr) {
   var apple = /iPad|iPhone|iPod/.test(navigator.userAgent);
   return apple ? "https://maps.apple.com/?q=" + q
                : "https://www.google.com/maps/search/?api=1&query=" + q;
+}
+/* An event place like "Austin's" or "the Johnsons" points to that family's address. */
+function placeAddress(place) {
+  var key = String(place).toLowerCase().replace(/^(at\s+)?(the\s+)?/, "").replace(/(['’]s|s['’]?)\s*(house|home)?\s*$/, "").trim();
+  for (var i = 0; i < FAMILIES.length; i++) {
+    var fam = FAMILIES[i].toLowerCase().replace(/^the\s+/, "").replace(/['’]s$/, "");
+    if (key === fam && ADDRESSES[i]) return ADDRESSES[i];
+  }
+  return place;
 }
 function hostHtml(hostText) {
   var fi = famIdxOfHostText(hostText);
@@ -682,7 +694,13 @@ function computeBase() {
     }
     var a = anchors[iso];
     if (a) {
-      if (a.type && order.indexOf(a.type) > -1) typePos = order.indexOf(a.type);
+      /* Move to the next slot of the anchored type (staying put if we're already on one),
+         so shifting a mid-cycle week doesn't restart the cycle or move fun weeks. */
+      if (a.type && order.indexOf(a.type) > -1) {
+        for (var k = 0; k < order.length; k++) {
+          if (order[(typePos + k) % order.length] === a.type) { typePos = (typePos + k) % order.length; break; }
+        }
+      }
       if (typeof a.hostIdx === "number") hostPos = ((a.hostIdx % 4) + 4) % 4;
     }
     var type = order[typePos];
@@ -807,7 +825,7 @@ function render() {
         '<div class="info">' +
           '<span class="type t-event">Event</span>' +
           '<div class="host">' + esc(ev.title || "Event") + '</div>' +
-          (ev.place ? '<div class="lead">' + esc(ev.place) + '<a class="dir-btn" href="' + mapsLink(ev.place) +
+          (ev.place ? '<div class="lead">' + esc(ev.place) + '<a class="dir-btn" href="' + mapsLink(placeAddress(ev.place)) +
             '" target="_blank" rel="noopener">&#128205; Directions</a></div>' : "") +
           (ev.note ? '<div class="note">' + esc(ev.note) + '</div>' : "") +
         '</div>' +

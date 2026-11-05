@@ -15,11 +15,25 @@ A schedule page for a 4-family life group, built as a **single self-contained `i
 
 The schedule is **computed, not stored**. A rotation engine in the page generates all 52 weeks from rules + seed values; Firestore only stores *deviations* (one-week edits, rotation shifts, view stats). An empty database = the pure default rotation. This means "Reset to default" is always possible per-week, and regenerating or extending the schedule never loses user edits.
 
-## The rotation rules (the domain logic — don't break these)
+## New pattern from Nov 11, 2026 (`NEW_START`)
+
+Decided with the owner 2026-11-05. Weeks **before** `NEW_START = "2026-11-11"` still use the original rules below (so history never changes); from Nov 11 on, `computeBase()` switches era:
+
+- No more men-only / women-only nights. Types: **Split Night** (`split` — everyone at one house, men and women meet separately) and **All Together** (`all`), plus **Fun Meetup** every 5th week.
+- `NEW_TYPE_ORDER` is a 10-week cycle `S T S T F | T S T S F`: each 5-week block starts with the opposite night. This is deliberate: with 4 families and fun weeks consuming no turns, a plain `S T S T F` would lock each family into always hosting/leading the same kind of night forever. The flip makes every family host and lead both kinds evenly (verified: 4 of each through Aug 2027). Trade-off the owner accepted: every other fun week has a together night on both sides.
+- **Hosting** rotates Austin → Havlin → Smith → Johnson, starting with the Austin's (`NEW_SEED.host = 0`).
+- **Leading** is one family rotation for both night types (`NEW_SEED.lead = 3`, the Johnson's first). On split nights the husband leads the men and the wife leads the women, displayed as e.g. "Noah A & Jillian" (`coupleOf(f)`). The leading family is always the family that hosted the previous non-fun week, so host≠lead holds with no skips.
+- **Fun weeks use no hosting or leading turn** (owner's explicit preference — don't change this).
+- Every new-era week defaults to **6:00 PM**, fun weeks included (`defaultTime()`).
+- Rotation anchors in the new era: an anchor's `type` moves to the *next* slot of that type (staying put if already on one), so "shift from here on" on a mid-cycle week doesn't restart the cycle or move fun weeks. `leadFam` is used for both `all` and `split`.
+- The edit modal shows Split / All Together / Fun for new-era weeks and the old four types for earlier weeks.
+- The one-week edits saved under the old pattern for Nov 11, Nov 25 and Jan 20 were cleared when this went live.
+
+## Original rotation rules (before Nov 11, 2026 — don't break these)
 
 - Meetings every **Wednesday**, starting **Aug 12, 2026** (`START = [2026, 7, 12]`, `NUM_WEEKS = 52`).
 - 4-week **type cycle**: Men's Night (6:30 PM) → Women's Night (6:30 PM) → All Together (6:00 PM) → Fun Meetup (out somewhere, time TBD).
-- **Hosting** rotates Austin's → Havlin's → Smith's → Johnson's, but **fun weeks don't consume a hosting turn**. Seed: Havlin's host first (`SEED.host = 1`).
+- (Original) **Hosting** rotates Austin's → Havlin's → Smith's → Johnson's, but **fun weeks don't consume a hosting turn**. Seed: Havlin's host first (`SEED.host = 1`).
 - **Leaders** rotate per meeting type:
   - Men: Noah A (Austin), Mitchell (Havlin), Pablo (Smith), Noah J (Johnson) — `SEED.men = 0`
   - Women: Jillian (Austin), Emmalie (Smith), Haleigh (Havlin), Carly (Johnson) — `SEED.women = 3` (Carly first)
@@ -56,7 +70,7 @@ The previous per-collection version is in the Firebase console's rules history (
 - Schedule list grouped by month; "Next up" badge on the coming Wednesday; auto-scrolls there on load; past weeks hidden with a "Show past weeks" toggle (fully-past month headers hide too).
 - **Edit mode** (✎ button — intentionally **no password**; it was removed on purpose): tap any week → modal with meeting-type select, host dropdown (4 families / "Out somewhere!" / Other… free text), leader dropdown (per-type lists / None / Other…), time, note, cancelled checkbox, and a scope choice: **"Only this week"** (writes `schedule/{date}`) vs **"Shift the rotation from here on"** (writes `rotation/{date}` anchor + any extras). "Reset to default" deletes both docs.
 - Markers: orange dot = one-week edit; ⟳ = rotation shift starts here; "Cancelled" strikes through.
-- **One-off events**: in edit mode a purple "+ Add event" button appears; tapping an event opens its editor with Delete (confirm prompt). Events show a purple left stripe, weekday in the date chip, and a 📍 Directions pill when `place` is set. Past events hide with past weeks; "Next up" stays on meetings only.
+- **One-off events**: in edit mode a purple "+ Add event" button appears; tapping an event opens its editor with Delete (confirm prompt). Events show a purple left stripe, weekday in the date chip, and a 📍 Directions pill when `place` is set (a family name like "Austin's" maps to that family's address via `placeAddress()`). Past events hide with past weeks; "Next up" stays on meetings only.
 - **Men's Prayer Chain** tab: each man calls/prays for one other; offsets 1→2→3 over a 3-week cycle (week 2 is mutual pairs), so each man covers all three others, then repeats. **Flips Wednesdays at 5:00 PM local** (`firstFlip = START date at 17:00`) so new assignments can be announced at that night's meeting. Pure date math — nothing stored.
 - Footer view counter: "N views · N this week (N people)" — "week" is meeting-to-meeting, uniqueness is per-device.
 - Firebase-down / not-configured states degrade gracefully to the computed default schedule with a banner.
