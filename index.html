@@ -437,8 +437,8 @@
 
   <div class="rotation">
     <div class="rt">How the rotation works</div>
-    <p>We meet every Wednesday at <strong>6:00 PM</strong>, alternating <strong>Split nights</strong> and <strong>All together</strong> nights, with a <strong>Fun meetup</strong> out somewhere every fifth week. On split nights the men and women meet separately in the same house. After each fun week the pattern starts with the other kind of night, so everyone gets a turn at both.</p>
-    <p>Hosting rotates between the <strong>Austin&rsquo;s</strong>, <strong>Havlin&rsquo;s</strong>, <strong>Smith&rsquo;s</strong>, and <strong>Johnson&rsquo;s</strong>. Leading rotates by family too &mdash; on split nights the husband leads the men and the wife leads the women. Fun weeks don&rsquo;t use a hosting or leading turn. Nobody ever hosts and leads the same week &mdash; if a change would cause that, the rotation skips them to their next turn.</p>
+    <p>We meet every Wednesday at <strong>6:00 PM</strong>, alternating <strong>All together</strong> nights and <strong>Split nights</strong>, with a <strong>Fun meetup</strong> out somewhere every fifth week. On split nights the men and women meet separately.</p>
+    <p>The <strong>Johnson&rsquo;s</strong> host every split night, and the <strong>Austin&rsquo;s</strong>, <strong>Havlin&rsquo;s</strong> &amp; <strong>Smith&rsquo;s</strong> take turns hosting together nights. Leading rotates by family &mdash; on split nights the husband leads the men and the wife leads the women. Over each 15 weeks every family leads three times, and nobody ever hosts and leads the same night.</p>
     <p>Anyone can tap <strong>&#9998; Edit schedule</strong> above to make changes &mdash; they save for everyone. A change can apply to <strong>just that week</strong>, or <strong>shift the whole rotation</strong> from that week forward. The &#10227; mark shows where a rotation shift starts; the orange dot marks a one-week change.</p>
     <p>Planning something extra together? While editing, tap <strong>+ Add event</strong> to put a one-off <strong>event</strong> on the schedule &mdash; any day of the week.</p>
   </div>
@@ -584,17 +584,53 @@ var WOMEN = [{ n: "Jillian", f: 0 }, { n: "Emmalie", f: 2 }, { n: "Haleigh", f: 
 /* Starting queue positions (chosen so nobody hosts + leads the same week) */
 var SEED = { host: 1, men: 0, women: 3, all: 0 };
 
-/* From NEW_START on, the schedule follows the new pattern: split and together
-   nights alternate with a fun week every 5th week, every week at 6:00 PM.
-   Each 5-week block starts with the opposite night from the last one
-   (S T S T F | T S T S F), so with 4 families every family ends up hosting
-   and leading both kinds of night. Fun weeks use no hosting or leading turn.
-   One family leads each non-fun week (on split nights the husband leads the
-   men and the wife leads the women). Weeks before NEW_START keep the old
-   men / women / all / fun pattern above so history doesn't change. */
+/* From NEW_START on, the schedule follows a fixed 15-week table that repeats:
+   split and together nights alternate, with a fun week every 5th week.
+   The Johnson's host every split night; the Austin's, Havlin's and Smith's take
+   turns hosting together nights. One family leads each week (on split nights
+   the husband leads the men and the wife leads the women). Over 15 weeks every
+   family leads 3 times: the Johnson's lead 3 together nights (never a split,
+   since they host those), everyone else leads 2 splits + 1 together, and nobody
+   leads a night they host. Every week is 6:00 PM. Weeks before NEW_START keep
+   the old men / women / all / fun pattern above so history doesn't change.
+   f = family index: 0 Austin, 1 Havlin, 2 Smith, 3 Johnson. */
 var NEW_START = "2026-11-11";
-var NEW_TYPE_ORDER = ["split", "all", "split", "all", "fun", "all", "split", "all", "split", "fun"];
-var NEW_SEED = { host: 0, lead: 3 };   // Austin's host first, Johnson's lead first
+var NEW_TABLE = [
+  { t: "all",   host: 0, lead: 3 },
+  { t: "split", host: 3, lead: 1 },
+  { t: "all",   host: 1, lead: 2 },
+  { t: "fun" },
+  { t: "split", host: 3, lead: 2 },
+  { t: "all",   host: 2, lead: 0 },
+  { t: "split", host: 3, lead: 1 },
+  { t: "all",   host: 0, lead: 3 },
+  { t: "fun" },
+  { t: "split", host: 3, lead: 0 },
+  { t: "all",   host: 1, lead: 3 },
+  { t: "split", host: 3, lead: 2 },
+  { t: "all",   host: 2, lead: 1 },
+  { t: "fun" },
+  { t: "split", host: 3, lead: 0 }
+];
+
+/* A rotation anchor in the new era: if this week's slot already has the anchored
+   type and host, stay on it (only the leader changes for that week). Otherwise jump
+   to the slot that best matches (type, then host, then leader), nearest going forward.
+   That lets "shift from here on" slide the whole table by setting a week to the
+   values of the week before it. */
+function tableSlotFor(a, fromPos) {
+  var cur = NEW_TABLE[fromPos];
+  if (cur.t === a.type && (typeof a.hostIdx !== "number" || cur.host === a.hostIdx)) return fromPos;
+  var best = -1, bestScore = -1;
+  for (var k = 0; k < NEW_TABLE.length; k++) {
+    var p = (fromPos + k) % NEW_TABLE.length, row = NEW_TABLE[p];
+    if (row.t !== a.type) continue;
+    var score = 1 + (typeof a.hostIdx === "number" && row.host === a.hostIdx ? 2 : 0) +
+                (typeof a.leadFam === "number" && row.lead === a.leadFam ? 1 : 0);
+    if (score > bestScore) { best = p; bestScore = score; }
+  }
+  return best;
+}
 
 /* ---- State ---- */
 var overrides = {};   // per-date one-week changes   (Firestore: schedule/{date})
@@ -679,32 +715,47 @@ function computeBase() {
   var menQ = rotArr(MEN.slice(), SEED.men);
   var womenQ = rotArr(WOMEN.slice(), SEED.women);
   var allQ = rotArr([0, 1, 2, 3], SEED.all);
-  var order = TYPE_ORDER;
-  var newEra = false;
+  var tablePos = 0;
   var out = [];
   var d = new Date(START[0], START[1], START[2]);
   for (var i = 0; i < NUM_WEEKS; i++) {
     var iso = isoOf(d);
-    if (!newEra && isNewEra(iso)) {
-      newEra = true;
-      order = NEW_TYPE_ORDER;
-      typePos = 0;
-      hostPos = NEW_SEED.host;
-      allQ = rotArr([0, 1, 2, 3], NEW_SEED.lead);
-    }
     var a = anchors[iso];
-    if (a) {
-      /* Move to the next slot of the anchored type (staying put if we're already on one),
-         so shifting a mid-cycle week doesn't restart the cycle or move fun weeks. */
-      if (a.type && order.indexOf(a.type) > -1) {
-        for (var k = 0; k < order.length; k++) {
-          if (order[(typePos + k) % order.length] === a.type) { typePos = (typePos + k) % order.length; break; }
-        }
+    var w = { d: iso, anchored: !!a };
+
+    if (isNewEra(iso)) {
+      if (a && a.type) {
+        var slot = tableSlotFor(a, tablePos);
+        if (slot > -1) tablePos = slot;
       }
+      var row = NEW_TABLE[tablePos];
+      w.t = row.t;
+      if (row.t === "fun") {
+        w.hostIdx = -1;
+        w.host = "Out somewhere!";
+        w.lead = "";
+      } else {
+        /* an anchor's own host/leader win for its week if the table had no exact match */
+        var h = (a && typeof a.hostIdx === "number") ? a.hostIdx : row.host;
+        var lf = (a && typeof a.leadFam === "number") ? a.leadFam : row.lead;
+        w.hostIdx = h;
+        w.host = "at " + FAMILIES[h];
+        w.leadFam = lf;
+        w.lead = row.t === "split" ? coupleOf(lf) : FAMILIES[lf];
+      }
+      w.time = defaultTime(row.t, iso);
+      tablePos = (tablePos + 1) % NEW_TABLE.length;
+      out.push(w);
+      d.setDate(d.getDate() + 7);
+      continue;
+    }
+
+    if (a) {
+      if (a.type && TYPE_ORDER.indexOf(a.type) > -1) typePos = TYPE_ORDER.indexOf(a.type);
       if (typeof a.hostIdx === "number") hostPos = ((a.hostIdx % 4) + 4) % 4;
     }
-    var type = order[typePos];
-    var w = { d: iso, t: type, anchored: !!a };
+    var type = TYPE_ORDER[typePos];
+    w.t = type;
     if (type === "fun") {
       w.hostIdx = -1;
       w.host = "Out somewhere!";
@@ -719,16 +770,13 @@ function computeBase() {
       } else if (type === "women") {
         w.lead = takeLeader(womenQ, hostPos, a ? a.leadName : null);
       } else {
-        var af = null;
-        if (a && typeof a.leadFam === "number") af = a.leadFam;
-        else if (a && a.leadName && famOfPerson(a.leadName) !== null) af = famOfPerson(a.leadName);
-        var lf = takeFamily(allQ, hostPos, af);
-        w.leadFam = lf;
-        w.lead = type === "split" ? coupleOf(lf) : FAMILIES[lf];
+        var lfam = takeFamily(allQ, hostPos, (a && typeof a.leadFam === "number") ? a.leadFam : null);
+        w.leadFam = lfam;
+        w.lead = FAMILIES[lfam];
       }
       hostPos = (hostPos + 1) % 4;
     }
-    typePos = (typePos + 1) % order.length;
+    typePos = (typePos + 1) % 4;
     out.push(w);
     d.setDate(d.getDate() + 7);
   }

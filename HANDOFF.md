@@ -17,17 +17,41 @@ The schedule is **computed, not stored**. A rotation engine in the page generate
 
 ## New pattern from Nov 11, 2026 (`NEW_START`)
 
-Decided with the owner 2026-11-05. Weeks **before** `NEW_START = "2026-11-11"` still use the original rules below (so history never changes); from Nov 11 on, `computeBase()` switches era:
+Decided with the owner 2026-11-05 (second revision the same day). Weeks **before** `NEW_START = "2026-11-11"` still use the original rules below, so history never changes. From Nov 11 on, `computeBase()` reads a **fixed 15-week table, `NEW_TABLE`**, that repeats:
 
-- No more men-only / women-only nights. Types: **Split Night** (`split` — everyone at one house, men and women meet separately) and **All Together** (`all`), plus **Fun Meetup** every 5th week.
-- `NEW_TYPE_ORDER` is a 10-week cycle `S T S T F | T S T S F`: each 5-week block starts with the opposite night. This is deliberate: with 4 families and fun weeks consuming no turns, a plain `S T S T F` would lock each family into always hosting/leading the same kind of night forever. The flip makes every family host and lead both kinds evenly (verified: 4 of each through Aug 2027). Trade-off the owner accepted: every other fun week has a together night on both sides.
-- **Hosting** rotates Austin → Havlin → Smith → Johnson, starting with the Austin's (`NEW_SEED.host = 0`).
-- **Leading** is one family rotation for both night types (`NEW_SEED.lead = 3`, the Johnson's first). On split nights the husband leads the men and the wife leads the women, displayed as e.g. "Noah A & Jillian" (`coupleOf(f)`). The leading family is always the family that hosted the previous non-fun week, so host≠lead holds with no skips.
-- **Fun weeks use no hosting or leading turn** (owner's explicit preference — don't change this).
-- Every new-era week defaults to **6:00 PM**, fun weeks included (`defaultTime()`).
-- Rotation anchors in the new era: an anchor's `type` moves to the *next* slot of that type (staying put if already on one), so "shift from here on" on a mid-cycle week doesn't restart the cycle or move fun weeks. `leadFam` is used for both `all` and `split`.
-- The edit modal shows Split / All Together / Fun for new-era weeks and the old four types for earlier weeks.
-- The one-week edits saved under the old pattern for Nov 11, Nov 25 and Jan 20 were cleared when this went live.
+| # | Night | Host | Leads |
+|---|---|---|---|
+| 1 | All Together | Austin's | Johnson's |
+| 2 | Split | Johnson's | Havlin's (Mitchell & Haleigh) |
+| 3 | All Together | Havlin's | Smith's |
+| 4 | Fun | — | — |
+| 5 | Split | Johnson's | Smith's (Pablo & Emmalie) |
+| 6 | All Together | Smith's | Austin's |
+| 7 | Split | Johnson's | Havlin's |
+| 8 | All Together | Austin's | Johnson's |
+| 9 | Fun | — | — |
+| 10 | Split | Johnson's | Austin's (Noah A & Jillian) |
+| 11 | All Together | Havlin's | Johnson's |
+| 12 | Split | Johnson's | Smith's |
+| 13 | All Together | Smith's | Havlin's |
+| 14 | Fun | — | — |
+| 15 | Split | Johnson's | Austin's |
+
+Why it's this way (the owner's requirements):
+- **Split and together alternate** with fun every 5th week, so nobody goes long without one kind of night. An earlier version flipped the order each cycle and caused near-month gaps, which the owner rejected.
+- **The Johnson's host every split night** because they drive far. The Austin's, Havlin's and Smith's take turns hosting together nights.
+- **Fun weeks use no hosting or leading turn.** This is the owner's explicit preference, so don't change it.
+- **Leading:** one family per week. On split nights the husband leads the men and the wife leads the women (`coupleOf(f)`). Every family leads 3 times per 15 weeks. The Johnson's lead 3 together nights and never a split, since they host every split. Everyone else leads 2 splits and 1 together. Nobody leads a night they host.
+- **Why a table instead of rotation queues:** no simple queue satisfies these rules. Every start order locks some family out of leading one kind of night (verified by brute force).
+- Every new-era week defaults to **6:00 PM**, fun included (`defaultTime()`).
+
+Other details:
+- **Rotation anchors in the new era** (`tableSlotFor`):
+  - If the current slot already has the anchored type and host, the table stays put and the anchor's leader applies to that week only.
+  - Otherwise the table jumps to the best-matching slot (type, then host, then leader), nearest going forward. Setting a week to the previous week's values slides the whole table back one week.
+  - An anchor's own host and leader always show for its week.
+- **Edit modal:** shows Split / All Together / Fun for new-era weeks, and the old four types for earlier weeks.
+- **Cleared edits:** the one-week edits saved under the old pattern for Nov 11, Nov 25 and Jan 20 were cleared when the first version went live.
 
 ## Original rotation rules (before Nov 11, 2026 — don't break these)
 
