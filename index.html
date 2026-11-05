@@ -228,6 +228,7 @@
   .t-women { background: var(--women-bg); color: var(--women); }
   .t-all { background: var(--all-bg); color: var(--all); }
   .t-fun { background: var(--fun-bg); color: var(--fun); }
+  .t-split { background: var(--men-bg); color: var(--men); }
   .t-event { background: var(--event-bg); color: var(--event); }
   .item.event { border-left: 4px solid var(--event); }
   .date-chip .wd { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 1px; color: var(--event); }
@@ -436,9 +437,8 @@
 
   <div class="rotation">
     <div class="rt">How the rotation works</div>
-    <p>We cycle through four weeks: <strong>Men&rsquo;s night</strong>, <strong>Women&rsquo;s night</strong>, <strong>All together</strong>, then a <strong>Fun meetup</strong> out somewhere.</p>
-    <p>Hosting rotates between the <strong>Austin&rsquo;s</strong>, <strong>Havlin&rsquo;s</strong>, <strong>Smith&rsquo;s</strong>, and <strong>Johnson&rsquo;s</strong>. Fun weeks don&rsquo;t use a hosting turn &mdash; the next family up hosts the following week.</p>
-    <p>Leading rotates too: <strong>Noah A, Mitchell, Pablo &amp; Noah J</strong> on men&rsquo;s nights, <strong>Jillian, Emmalie, Haleigh &amp; Carly</strong> on women&rsquo;s nights, and the families on all-together nights. Nobody ever hosts and leads the same week &mdash; if a change would cause that, the rotation skips them to their next turn.</p>
+    <p>We meet every Wednesday at <strong>6:00 PM</strong>, in a five-week cycle: <strong>Split night</strong>, <strong>All together</strong>, <strong>Split night</strong>, <strong>All together</strong>, then a <strong>Fun meetup</strong> out somewhere. On split nights the men and women meet separately in the same house.</p>
+    <p>Hosting rotates between the <strong>Austin&rsquo;s</strong>, <strong>Havlin&rsquo;s</strong>, <strong>Smith&rsquo;s</strong>, and <strong>Johnson&rsquo;s</strong>. Leading rotates by family too &mdash; on split nights the husband leads the men and the wife leads the women. Fun weeks don&rsquo;t use a hosting or leading turn. Nobody ever hosts and leads the same week &mdash; if a change would cause that, the rotation skips them to their next turn.</p>
     <p>Anyone can tap <strong>&#9998; Edit schedule</strong> above to make changes &mdash; they save for everyone. A change can apply to <strong>just that week</strong>, or <strong>shift the whole rotation</strong> from that week forward. The &#10227; mark shows where a rotation shift starts; the orange dot marks a one-week change.</p>
     <p>Planning something extra together? While editing, tap <strong>+ Add event</strong> to put a one-off <strong>event</strong> on the schedule &mdash; any day of the week.</p>
   </div>
@@ -466,12 +466,7 @@
   <div class="modal">
     <h3 id="mTitle"></h3>
     <label>Meeting type
-      <select id="mType">
-        <option value="men">Men&rsquo;s Night</option>
-        <option value="women">Women&rsquo;s Night</option>
-        <option value="all">All Together</option>
-        <option value="fun">Fun Meetup</option>
-      </select>
+      <select id="mType"></select>
     </label>
     <label>Host / location
       <select id="mHostSel"></select>
@@ -556,8 +551,27 @@ var TYPEMETA = {
   men:   { label: "Men’s Night",   cls: "t-men",   time: "6:30 PM" },
   women: { label: "Women’s Night", cls: "t-women", time: "6:30 PM" },
   all:   { label: "All Together",  cls: "t-all",   time: "6:00 PM" },
-  fun:   { label: "Fun Meetup",    cls: "t-fun",   time: "Time TBD" }
+  fun:   { label: "Fun Meetup",    cls: "t-fun",   time: "Time TBD" },
+  split: { label: "Split Night",   cls: "t-split", time: "6:00 PM" }
 };
+var NEW_FUN_TIME = "6:00 PM";
+
+function isNewEra(iso) { return iso >= NEW_START; }
+function defaultTime(type, iso) {
+  return (type === "fun" && isNewEra(iso)) ? NEW_FUN_TIME : TYPEMETA[type].time;
+}
+/* "Noah A & Jillian" for a family index */
+function coupleOf(f) {
+  var m = "", w = "", i;
+  for (i = 0; i < MEN.length; i++) if (MEN[i].f === f) m = MEN[i].n;
+  for (i = 0; i < WOMEN.length; i++) if (WOMEN[i].f === f) w = WOMEN[i].n;
+  return m && w ? m + " & " + w : FAMILIES[f];
+}
+function famOfPerson(name) {
+  var pool = MEN.concat(WOMEN);
+  for (var i = 0; i < pool.length; i++) if (pool[i].n === name) return pool[i].f;
+  return null;
+}
 var FAMILIES = ["the Austin’s", "the Havlin’s", "the Smith’s", "the Johnson’s"];
 var ADDRESSES = [
   "215 Milam Creek Drive, Kyle, TX 78640",       // Austin’s
@@ -569,6 +583,15 @@ var MEN   = [{ n: "Noah A", f: 0 }, { n: "Mitchell", f: 1 }, { n: "Pablo", f: 2 
 var WOMEN = [{ n: "Jillian", f: 0 }, { n: "Emmalie", f: 2 }, { n: "Haleigh", f: 1 }, { n: "Carly", f: 3 }];
 /* Starting queue positions (chosen so nobody hosts + leads the same week) */
 var SEED = { host: 1, men: 0, women: 3, all: 0 };
+
+/* From NEW_START on, the schedule follows the new pattern: a 5-week cycle of
+   split / together / split / together / fun, every week at 6:00 PM.
+   One family leads each non-fun week (on split nights the husband leads the
+   men and the wife leads the women). Weeks before NEW_START keep the old
+   men / women / all / fun pattern above so history doesn't change. */
+var NEW_START = "2026-11-11";
+var NEW_TYPE_ORDER = ["split", "all", "split", "all", "fun"];
+var NEW_SEED = { host: 0, lead: 3 };   // Austin's host first, Johnson's lead first
 
 /* ---- State ---- */
 var overrides = {};   // per-date one-week changes   (Firestore: schedule/{date})
@@ -644,22 +667,31 @@ function computeBase() {
   var menQ = rotArr(MEN.slice(), SEED.men);
   var womenQ = rotArr(WOMEN.slice(), SEED.women);
   var allQ = rotArr([0, 1, 2, 3], SEED.all);
+  var order = TYPE_ORDER;
+  var newEra = false;
   var out = [];
   var d = new Date(START[0], START[1], START[2]);
   for (var i = 0; i < NUM_WEEKS; i++) {
     var iso = isoOf(d);
+    if (!newEra && isNewEra(iso)) {
+      newEra = true;
+      order = NEW_TYPE_ORDER;
+      typePos = 0;
+      hostPos = NEW_SEED.host;
+      allQ = rotArr([0, 1, 2, 3], NEW_SEED.lead);
+    }
     var a = anchors[iso];
     if (a) {
-      if (a.type && TYPE_ORDER.indexOf(a.type) > -1) typePos = TYPE_ORDER.indexOf(a.type);
+      if (a.type && order.indexOf(a.type) > -1) typePos = order.indexOf(a.type);
       if (typeof a.hostIdx === "number") hostPos = ((a.hostIdx % 4) + 4) % 4;
     }
-    var type = TYPE_ORDER[typePos];
+    var type = order[typePos];
     var w = { d: iso, t: type, anchored: !!a };
     if (type === "fun") {
       w.hostIdx = -1;
       w.host = "Out somewhere!";
       w.lead = "";
-      w.time = TYPEMETA.fun.time;
+      w.time = defaultTime("fun", iso);
     } else {
       w.hostIdx = hostPos;
       w.host = "at " + FAMILIES[hostPos];
@@ -669,12 +701,16 @@ function computeBase() {
       } else if (type === "women") {
         w.lead = takeLeader(womenQ, hostPos, a ? a.leadName : null);
       } else {
-        var lf = takeFamily(allQ, hostPos, (a && typeof a.leadFam === "number") ? a.leadFam : null);
-        w.lead = FAMILIES[lf];
+        var af = null;
+        if (a && typeof a.leadFam === "number") af = a.leadFam;
+        else if (a && a.leadName && famOfPerson(a.leadName) !== null) af = famOfPerson(a.leadName);
+        var lf = takeFamily(allQ, hostPos, af);
+        w.leadFam = lf;
+        w.lead = type === "split" ? coupleOf(lf) : FAMILIES[lf];
       }
       hostPos = (hostPos + 1) % 4;
     }
-    typePos = (typePos + 1) % 4;
+    typePos = (typePos + 1) % order.length;
     out.push(w);
     d.setDate(d.getDate() + 7);
   }
@@ -693,7 +729,7 @@ function merged(w) {
     cls: meta.cls,
     host: (o.host !== undefined && o.host !== "") ? o.host : (o.type && o.type !== w.t && type === "fun" ? "Out somewhere!" : w.host),
     lead: (o.lead !== undefined) ? o.lead : (o.type && o.type !== w.t ? "" : w.lead),
-    time: (o.time !== undefined && o.time !== "") ? o.time : (o.type && o.type !== w.t ? meta.time : w.time),
+    time: (o.time !== undefined && o.time !== "") ? o.time : (o.type && o.type !== w.t ? defaultTime(type, w.d) : w.time),
     note: o.note || "",
     cancelled: !!o.cancelled,
     edited: !!overrides[w.d],
@@ -969,6 +1005,8 @@ function fillLeadSel(type, currentLead) {
     for (i = 0; i < WOMEN.length; i++) opts += '<option value="' + esc(WOMEN[i].n) + '">' + esc(WOMEN[i].n) + '</option>';
   } else if (type === "all") {
     for (i = 0; i < 4; i++) opts += '<option value="fam:' + i + '">' + esc(FAMILIES[i]) + '</option>';
+  } else if (type === "split") {
+    for (i = 0; i < 4; i++) opts += '<option value="fam:' + i + '">' + esc(coupleOf(i)) + '</option>';
   } else {
     var everyone = MEN.concat(WOMEN);
     for (i = 0; i < everyone.length; i++) opts += '<option value="' + esc(everyone[i].n) + '">' + esc(everyone[i].n) + '</option>';
@@ -979,8 +1017,10 @@ function fillLeadSel(type, currentLead) {
 
   var matched = false;
   if (!currentLead) { sel.value = "none"; matched = true; }
-  else if (type === "all") {
-    for (i = 0; i < 4; i++) if (currentLead === FAMILIES[i]) { sel.value = "fam:" + i; matched = true; break; }
+  else if (type === "all" || type === "split") {
+    for (i = 0; i < 4; i++) {
+      if (currentLead === FAMILIES[i] || currentLead === coupleOf(i)) { sel.value = "fam:" + i; matched = true; break; }
+    }
   } else {
     for (i = 0; i < sel.options.length; i++) {
       if (sel.options[i].value === currentLead) { sel.value = currentLead; matched = true; break; }
@@ -990,11 +1030,22 @@ function fillLeadSel(type, currentLead) {
   else { sel.value = "other"; $("mLeadCustom").hidden = false; $("mLeadCustom").value = currentLead; }
 }
 
+function fillTypeSel(date, currentType) {
+  var types = isNewEra(date) ? ["split", "all", "fun"] : ["men", "women", "all", "fun"];
+  if (types.indexOf(currentType) < 0) types.push(currentType);
+  var opts = "";
+  for (var i = 0; i < types.length; i++) {
+    opts += '<option value="' + types[i] + '">' + esc(TYPEMETA[types[i]].label) + '</option>';
+  }
+  $("mType").innerHTML = opts;
+}
+
 function openModal(date) {
   currentDate = date;
   var base = baseMap[date];
   if (!base) return;
   var m = merged(base);
+  fillTypeSel(date, m.type);
   var dt = new Date(date + "T12:00:00");
   $("mTitle").textContent = "Edit " + dt.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
   $("mType").value = m.type;
@@ -1009,7 +1060,7 @@ function openModal(date) {
 }
 
 $("mType").addEventListener("change", function () {
-  $("mTime").value = TYPEMETA[this.value].time;
+  $("mTime").value = defaultTime(this.value, currentDate);
   if (this.value === "fun") {
     $("mHostSel").value = "out"; $("mHostCustom").hidden = true;
     fillLeadSel("fun", "");
@@ -1039,9 +1090,9 @@ function resolveLead(type) {
   var v = $("mLeadSel").value;
   if (v === "none") return { text: "", known: false, famIdx: -1 };
   if (v === "other") return { text: $("mLeadCustom").value.trim(), known: false, famIdx: -1 };
-  if (type === "all" && v.indexOf("fam:") === 0) {
+  if (v.indexOf("fam:") === 0) {
     var fi = +v.slice(4);
-    return { text: FAMILIES[fi], known: true, famIdx: fi };
+    return { text: type === "split" ? coupleOf(fi) : FAMILIES[fi], known: true, famIdx: fi };
   }
   var pool = MEN.concat(WOMEN);
   for (var i = 0; i < pool.length; i++) {
@@ -1075,14 +1126,14 @@ $("mSave").addEventListener("click", function () {
   } else {
     var anchor = { type: type };
     if (type !== "fun" && host.famIdx > -1) anchor.hostIdx = host.famIdx;
-    if (type === "all" && lead.famIdx > -1) anchor.leadFam = lead.famIdx;
+    if ((type === "all" || type === "split") && lead.famIdx > -1) anchor.leadFam = lead.famIdx;
     else if ((type === "men" || type === "women") && lead.known) anchor.leadName = lead.text;
     writes.push(db.collection("rotation").doc(currentDate).set(anchor));
 
     var extras = {};
     if (cancelled) extras.cancelled = true;
     if (note) extras.note = note;
-    if (time && time !== TYPEMETA[type].time) extras.time = time;
+    if (time && time !== defaultTime(type, currentDate)) extras.time = time;
     if (type !== "fun" && host.famIdx === -1) extras.host = host.text;
     if (!lead.known && lead.text) extras.lead = lead.text;
     if (type !== "fun" && $("mLeadSel").value === "none") extras.lead = "";
