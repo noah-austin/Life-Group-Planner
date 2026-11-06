@@ -23,25 +23,26 @@ Decided with the owner 2026-11-05 (second revision the same day). Weeks **before
 |---|---|---|---|
 | 1 | All Together | Austin's | Johnson's |
 | 2 | Split | Johnson's | Havlin's (Mitchell & Haleigh) |
-| 3 | All Together | Havlin's | Smith's |
+| 3 | All Together | Havlin's | Austin's |
 | 4 | Fun | — | — |
 | 5 | Split | Johnson's | Smith's (Pablo & Emmalie) |
-| 6 | All Together | Smith's | Austin's |
-| 7 | Split | Johnson's | Havlin's |
-| 8 | All Together | Austin's | Johnson's |
+| 6 | All Together | Smith's | Johnson's |
+| 7 | Split | Johnson's | Austin's (Noah A & Jillian) |
+| 8 | All Together | Austin's | Smith's |
 | 9 | Fun | — | — |
-| 10 | Split | Johnson's | Austin's (Noah A & Jillian) |
+| 10 | Split | Johnson's | Havlin's |
 | 11 | All Together | Havlin's | Johnson's |
-| 12 | Split | Johnson's | Smith's |
+| 12 | Split | Johnson's | Austin's |
 | 13 | All Together | Smith's | Havlin's |
 | 14 | Fun | — | — |
-| 15 | Split | Johnson's | Austin's |
+| 15 | Split | Johnson's | Smith's |
 
 Why it's this way (the owner's requirements):
 - **Split and together alternate** with fun every 5th week, so nobody goes long without one kind of night. An earlier version flipped the order each cycle and caused near-month gaps, which the owner rejected.
 - **The Johnson's host every split night** because they drive far. The Austin's, Havlin's and Smith's take turns hosting together nights.
 - **Fun weeks use no hosting or leading turn.** This is the owner's explicit preference, so don't change it.
 - **Leading:** one family per week. On split nights the husband leads the men and the wife leads the women (`coupleOf(f)`). Every family leads 3 times per 15 weeks. The Johnson's lead 3 together nights and never a split, since they host every split. Everyone else leads 2 splits and 1 together. Nobody leads a night they host.
+- **Spacing:** the leader order was picked by brute force over all 3,600 valid orders (2026-11-06) to maximize the gap between a family's turns: every family has at least two other meetings between its turns. A gap of 3+ for everyone is impossible under these rules. The owner flagged the earlier order because the Smith's led back-to-back meetings. Re-check spacing after any change to the table.
 - **Why a table instead of rotation queues:** no simple queue satisfies these rules. Every start order locks some family out of leading one kind of night (verified by brute force).
 - New-era default times (`NEW_TIMES` via `defaultTime()`): **split nights 6:00 PM**, **together and fun nights 6:30 PM** (owner's request 2026-11-06).
 
