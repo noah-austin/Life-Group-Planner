@@ -86,7 +86,7 @@ service cloud.firestore {
 }
 ```
 
-The previous per-collection version is in the Firebase console's rules history (Aug 8, 2026). Rules are edited at console.firebase.google.com → Life Group Planner → Firestore → Rules → Publish; Claude can't change them (no admin credentials), but it **can** read and write the data itself via the Firestore REST API (`https://firestore.googleapis.com/v1/projects/life-group-planner/databases/(default)/documents/<collection>`), since the rules are open. Read freely to check real data; don't write test data without the owner's OK beyond a create-then-delete check.
+The previous per-collection version is in the Firebase console's rules history (Aug 8, 2026). Rules are edited at console.firebase.google.com → Life Group Planner → Firestore → Rules → Publish; Claude can't change them (no admin credentials), but it **can** read and write the data itself via the Firestore REST API (`https://firestore.googleapis.com/v1/projects/life-group-planner/databases/(default)/documents/<collection>`), since the rules are open. Read freely to check real data; don't write test data without the owner's OK beyond a create-then-delete check. **When editing a doc via REST, always send every field** — a PATCH with `updateMask` through this sandbox's proxy replaced the whole doc and wiped its other fields (happened once on 2026-11-06; restored immediately). Read the doc first, then PATCH the full field set.
 
 ## UI features (all in index.html)
 
