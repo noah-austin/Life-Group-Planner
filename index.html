@@ -437,7 +437,7 @@
 
   <div class="rotation">
     <div class="rt">How the rotation works</div>
-    <p>We meet every Wednesday at <strong>6:00 PM</strong>, alternating <strong>All together</strong> nights and <strong>Split nights</strong>, with a <strong>Fun meetup</strong> out somewhere every fifth week. On split nights the men and women meet separately.</p>
+    <p>We meet every Wednesday, alternating <strong>All together</strong> nights (<strong>6:30 PM</strong>) and <strong>Split nights</strong> (<strong>6:00 PM</strong>), with a <strong>Fun meetup</strong> out somewhere every fifth week. On split nights the men and women meet separately.</p>
     <p>The <strong>Johnson&rsquo;s</strong> host every split night, and the <strong>Austin&rsquo;s</strong>, <strong>Havlin&rsquo;s</strong> &amp; <strong>Smith&rsquo;s</strong> take turns hosting together nights. Leading rotates by family &mdash; on split nights the husband leads the men and the wife leads the women. Over each 15 weeks every family leads three times, and nobody ever hosts and leads the same night.</p>
     <p>Anyone can tap <strong>&#9998; Edit schedule</strong> above to make changes &mdash; they save for everyone. A change can apply to <strong>just that week</strong>, or <strong>shift the whole rotation</strong> from that week forward. The &#10227; mark shows where a rotation shift starts; the orange dot marks a one-week change.</p>
     <p>Planning something extra together? While editing, tap <strong>+ Add event</strong> to put a one-off <strong>event</strong> on the schedule &mdash; any day of the week.</p>
@@ -554,11 +554,12 @@ var TYPEMETA = {
   fun:   { label: "Fun Meetup",    cls: "t-fun",   time: "Time TBD" },
   split: { label: "Split Night",   cls: "t-split", time: "6:00 PM" }
 };
-var NEW_FUN_TIME = "6:00 PM";
+/* New-era default times: split nights at the Johnson's 6:00, everything else 6:30 */
+var NEW_TIMES = { split: "6:00 PM", all: "6:30 PM", fun: "6:30 PM" };
 
 function isNewEra(iso) { return iso >= NEW_START; }
 function defaultTime(type, iso) {
-  return (type === "fun" && isNewEra(iso)) ? NEW_FUN_TIME : TYPEMETA[type].time;
+  return (isNewEra(iso) && NEW_TIMES[type]) ? NEW_TIMES[type] : TYPEMETA[type].time;
 }
 /* "Noah A & Jillian" for a family index */
 function coupleOf(f) {
@@ -591,7 +592,7 @@ var SEED = { host: 1, men: 0, women: 3, all: 0 };
    the husband leads the men and the wife leads the women). Over 15 weeks every
    family leads 3 times: the Johnson's lead 3 together nights (never a split,
    since they host those), everyone else leads 2 splits + 1 together, and nobody
-   leads a night they host. Every week is 6:00 PM. Weeks before NEW_START keep
+   leads a night they host. Split nights are 6:00 PM; together and fun nights 6:30 PM. Weeks before NEW_START keep
    the old men / women / all / fun pattern above so history doesn't change.
    f = family index: 0 Austin, 1 Havlin, 2 Smith, 3 Johnson. */
 var NEW_START = "2026-11-11";

@@ -43,7 +43,7 @@ Why it's this way (the owner's requirements):
 - **Fun weeks use no hosting or leading turn.** This is the owner's explicit preference, so don't change it.
 - **Leading:** one family per week. On split nights the husband leads the men and the wife leads the women (`coupleOf(f)`). Every family leads 3 times per 15 weeks. The Johnson's lead 3 together nights and never a split, since they host every split. Everyone else leads 2 splits and 1 together. Nobody leads a night they host.
 - **Why a table instead of rotation queues:** no simple queue satisfies these rules. Every start order locks some family out of leading one kind of night (verified by brute force).
-- Every new-era week defaults to **6:00 PM**, fun included (`defaultTime()`).
+- New-era default times (`NEW_TIMES` via `defaultTime()`): **split nights 6:00 PM**, **together and fun nights 6:30 PM** (owner's request 2026-11-06).
 
 Other details:
 - **Rotation anchors in the new era** (`tableSlotFor`):
