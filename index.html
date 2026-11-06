@@ -321,6 +321,7 @@
   }
   .rotation strong { color: var(--ink); font-weight: normal; }
   .rotation p + p { margin-top: 8px; }
+  footer a { color: inherit; }
   footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 26px; font-family: 'Helvetica Neue', Arial, sans-serif; }
 
   /* ---- Edit modal ---- */
@@ -458,7 +459,7 @@
     </div>
   </div>
 
-  <footer>Kicked off August 12, 2026<span id="viewStats"></span></footer>
+  <footer>Kicked off August 12, 2026<span id="viewStats"></span> &middot; <a href="#" id="refreshLink">&#8635; Refresh</a></footer>
 </div>
 
 <!-- Edit modal -->
@@ -534,6 +535,10 @@
 /* =====================================================================
    SETUP — firebaseConfig comes from your Firebase project.
    ===================================================================== */
+/* Bump this on every deploy so open pages (and home-screen apps, which have no
+   refresh button) notice the new version and reload themselves. */
+var APP_VERSION = "2026-11-06.2";
+
 var firebaseConfig = {
   apiKey: "AIzaSyA6tXNzYmPE0JRXAPJxIM6QBUAlU5XjK34",
   authDomain: "life-group-planner.firebaseapp.com",
@@ -1304,12 +1309,42 @@ $("togglePast").addEventListener("click", function () {
   this.textContent = on ? "Hide past weeks" : "Show past weeks";
 });
 
+/* ---- Auto-update ----
+   Phones (especially home-screen web apps) keep a saved copy of this page.
+   Fetch the live page, and if its APP_VERSION differs, reload a fresh copy.
+   The ?v= query gives the new copy its own URL so no old cache is reused. */
+function reloadFresh(v) {
+  location.replace(location.pathname + "?v=" + encodeURIComponent(v));
+}
+function checkForUpdate() {
+  if (!window.fetch) return;
+  if (editMode || !$("overlay").hidden || !$("evOverlay").hidden) return;  // don't interrupt an edit
+  fetch(location.pathname + "?check=" + Date.now(), { cache: "no-store" }).then(function (r) {
+    return r.ok ? r.text() : "";
+  }).then(function (t) {
+    var m = /var APP_VERSION = "([^"]+)"/.exec(t);
+    if (!m || m[1] === APP_VERSION) return;
+    var tried = null;
+    try { tried = sessionStorage.getItem("lg-tried"); sessionStorage.setItem("lg-tried", m[1]); } catch (e) {}
+    if (tried !== m[1]) reloadFresh(m[1]);   // only try once per version, so it can never loop
+  }).catch(function () {});
+}
+document.addEventListener("visibilitychange", function () {
+  if (document.visibilityState === "visible") checkForUpdate();
+});
+setInterval(checkForUpdate, 30 * 60 * 1000);
+$("refreshLink").addEventListener("click", function (e) {
+  e.preventDefault();
+  reloadFresh(APP_VERSION + "-" + Date.now());
+});
+
 /* ---- Go ---- */
 render();
 renderPrayerChain();
 connect();
 var nextEl = document.querySelector(".item.next");
 if (nextEl) nextEl.scrollIntoView({ block: "center" });
+setTimeout(checkForUpdate, 1500);
 </script>
 </body>
 </html>

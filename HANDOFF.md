@@ -111,6 +111,7 @@ The previous per-collection version is in the Firebase console's rules history (
 
 ## Deploy notes
 
+- **Bump `APP_VERSION` in `index.html` on every deploy.** Phones (especially the home-screen web app, which has no refresh button) keep a cached copy; GitHub Pages serves `max-age=600`. On load, when the app comes back to the foreground, and every 30 min, the page fetches itself with `cache: no-store`. If the live `APP_VERSION` differs, it reloads via `?v=<version>`, a fresh URL, so the CDN and browser caches are bypassed. It tries once per version per session so it can't loop, and it skips the check while editing. The footer's ↻ Refresh link forces the same reload. Forgetting the bump means phones only update when their cache expires.
 - Earlier history is web-UI uploads ("Delete index.html" / "Add files via upload"). Since 2026-10-19 changes are committed and pushed to `main` from Claude Code; Pages redeploys in a minute or two.
 
 ## Testing approach used so far
