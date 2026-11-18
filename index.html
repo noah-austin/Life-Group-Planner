@@ -57,6 +57,18 @@
   header { text-align: center; margin-bottom: 18px; }
   header h1 { font-size: 1.9rem; font-weight: normal; letter-spacing: 0.5px; }
   header p { color: var(--muted); font-size: 0.95rem; margin-top: 4px; }
+  .header-link {
+    display: inline-block;
+    margin-top: 10px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.8rem;
+    font-weight: bold;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    padding: 5px 14px;
+    text-decoration: none;
+  }
 
   .banner {
     font-family: 'Helvetica Neue', Arial, sans-serif;
@@ -418,6 +430,7 @@
   <header>
     <h1>Life Group</h1>
     <p>Wednesday nights &middot; who, where &amp; when</p>
+    <a class="header-link" href="https://austinridge.org/lifegroups/sermon-questions" target="_blank" rel="noopener">&#128214; Sermon Questions</a>
   </header>
 
   <div class="banner" id="banner" hidden></div>
@@ -537,7 +550,7 @@
    ===================================================================== */
 /* Bump this on every deploy so open pages (and home-screen apps, which have no
    refresh button) notice the new version and reload themselves. */
-var APP_VERSION = "2026-11-06.2";
+var APP_VERSION = "2026-11-18.1";
 
 var firebaseConfig = {
   apiKey: "AIzaSyA6tXNzYmPE0JRXAPJxIM6QBUAlU5XjK34",
