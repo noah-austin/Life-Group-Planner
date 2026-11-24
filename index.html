@@ -241,6 +241,8 @@
   .t-all { background: var(--all-bg); color: var(--all); }
   .t-fun { background: var(--fun-bg); color: var(--fun); }
   .t-split { background: var(--men-bg); color: var(--men); }
+  .t-skip { background: var(--line); color: var(--muted); }
+  .item.skipped { opacity: 0.7; }
   .t-event { background: var(--event-bg); color: var(--event); }
   .item.event { border-left: 4px solid var(--event); }
   .date-chip .wd { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 1px; color: var(--event); }
@@ -454,6 +456,7 @@
     <p>We meet every Wednesday, alternating <strong>All together</strong> nights (<strong>6:30 PM</strong>) and <strong>Split nights</strong> (<strong>6:00 PM</strong>), with a <strong>Fun meetup</strong> out somewhere every fifth week. On split nights the men and women meet separately.</p>
     <p>The <strong>Johnson&rsquo;s</strong> host every split night, and the <strong>Austin&rsquo;s</strong>, <strong>Havlin&rsquo;s</strong> &amp; <strong>Smith&rsquo;s</strong> take turns hosting together nights. Leading rotates by family &mdash; on split nights the husband leads the men and the wife leads the women. Over each 15 weeks every family leads three times, and nobody ever hosts and leads the same night.</p>
     <p>Anyone can tap <strong>&#9998; Edit schedule</strong> above to make changes &mdash; they save for everyone. A change can apply to <strong>just that week</strong>, or <strong>shift the whole rotation</strong> from that week forward. The &#10227; mark shows where a rotation shift starts; the orange dot marks a one-week change.</p>
+    <p>Not meeting one week? Open that week and tap <strong>Push back a week</strong> &mdash; it becomes &ldquo;no meeting&rdquo; and everything after it slides one week later. Tap the &ldquo;no meeting&rdquo; week again to undo.</p>
     <p>Planning something extra together? While editing, tap <strong>+ Add event</strong> to put a one-off <strong>event</strong> on the schedule &mdash; any day of the week.</p>
   </div>
   </div>
@@ -508,6 +511,7 @@
     <div class="mbtns">
       <button id="mSave" class="primary" type="button">Save for everyone</button>
       <button id="mReset" type="button">Reset to default</button>
+      <button id="mPushBack" type="button">Push back a week</button>
       <button id="mClose" type="button">Close</button>
     </div>
     <div class="mstatus" id="mStatus"></div>
@@ -550,7 +554,7 @@
    ===================================================================== */
 /* Bump this on every deploy so open pages (and home-screen apps, which have no
    refresh button) notice the new version and reload themselves. */
-var APP_VERSION = "2026-11-18.1";
+var APP_VERSION = "2026-11-24.1";
 
 var firebaseConfig = {
   apiKey: "AIzaSyA6tXNzYmPE0JRXAPJxIM6QBUAlU5XjK34",
@@ -740,6 +744,13 @@ function computeBase() {
   var d = new Date(START[0], START[1], START[2]);
   for (var i = 0; i < NUM_WEEKS; i++) {
     var iso = isoOf(d);
+    /* A pushed-back week: no meeting, and it uses no turn, so the whole
+       rotation after it lands one week later. */
+    if (overrides[iso] && overrides[iso].skip) {
+      out.push({ d: iso, t: "skip", hostIdx: -1, host: "", lead: "", time: "", anchored: false });
+      d.setDate(d.getDate() + 7);
+      continue;
+    }
     var a = anchors[iso];
     var w = { d: iso, anchored: !!a };
 
@@ -806,6 +817,14 @@ function computeBase() {
 /* ---- Merge one-week overrides on top of the computed base ---- */
 function merged(w) {
   var o = overrides[w.d] || {};
+  if (o.skip) {
+    return {
+      d: w.d, type: "skip", label: "No Meeting", cls: "t-skip",
+      host: "No meeting this week", lead: "", time: "",
+      note: o.note || "Schedule pushed back a week", cancelled: false,
+      edited: false, anchored: false, skip: true
+    };
+  }
   var type = o.type || w.t;
   var meta = TYPEMETA[type];
   return {
@@ -859,7 +878,7 @@ function render() {
     var dt = new Date(e.d + "T12:00:00");
     var monthLabel = dt.toLocaleDateString(undefined, { month: "long", year: "numeric" });
     var isPast = e.d < today;
-    var isNext = !isPast && !next && !!e.week;
+    var isNext = !isPast && !next && !!e.week && !e.week.skip;
     if (isNext) next = e.d;
     if (isPast) anyPast = true;
     if (monthLabel !== lastMonth) {
@@ -903,7 +922,7 @@ function render() {
     }
 
     var m = p.entry.week;
-    var cls = "item" + (p.isPast ? " past" : "") + (p.isNext ? " next" : "") + (m.cancelled ? " cancelled" : "");
+    var cls = "item" + (p.isPast ? " past" : "") + (p.isNext ? " next" : "") + (m.cancelled ? " cancelled" : "") + (m.skip ? " skipped" : "");
     html += '<div class="' + cls + '" data-date="' + m.d + '">' +
       chip +
       '<div class="info">' +
@@ -1131,6 +1150,10 @@ function openModal(date) {
   var base = baseMap[date];
   if (!base) return;
   var m = merged(base);
+  if (m.skip) {
+    if (confirm("No meeting this week. Undo the push-back? Everything after it moves back one week.")) shiftSchedule(date, -1);
+    return;
+  }
   fillTypeSel(date, m.type);
   var dt = new Date(date + "T12:00:00");
   $("mTitle").textContent = "Edit " + dt.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
@@ -1248,6 +1271,51 @@ $("mReset").addEventListener("click", function () {
   }).catch(function (err) {
     $("mStatus").textContent = "Couldn’t reset: " + err.message;
   });
+});
+
+/* ---- Push back / undo ----
+   Pushing back week X marks X "no meeting" (schedule/X = {skip:true}); the
+   engine then gives X no turn, so every later meeting lands a week later.
+   One-week edits and rotation shifts on or after X move +7 days with their
+   meetings (undo moves those after X back -7). Events keep their dates.
+   All writes go in one batch so the schedule never ends up half-moved. */
+function addDays(iso, n) {
+  var d = new Date(iso + "T12:00:00");
+  d.setDate(d.getDate() + n);
+  return isoOf(d);
+}
+function shiftSchedule(date, dir) {
+  if (!db) { alert("Not connected to the database — changes can’t be saved yet."); return Promise.resolve(); }
+  var batch = db.batch();
+  function moveAll(name, docs, extra) {
+    var oldKeys = [], target = {}, k;
+    for (k in docs) {
+      if (!docs.hasOwnProperty(k)) continue;
+      if (dir > 0 ? k >= date : k > date) { oldKeys.push(k); target[addDays(k, 7 * dir)] = docs[k]; }
+    }
+    if (extra) for (k in extra) target[k] = extra[k];
+    for (var i = 0; i < oldKeys.length; i++) {
+      if (!target.hasOwnProperty(oldKeys[i])) batch.delete(db.collection(name).doc(oldKeys[i]));
+    }
+    for (k in target) if (target.hasOwnProperty(k)) batch.set(db.collection(name).doc(k), target[k]);
+  }
+  if (dir > 0) {
+    moveAll("schedule", overrides, (function () { var x = {}; x[date] = { skip: true }; return x; })());
+    moveAll("rotation", anchors);
+  } else {
+    batch.delete(db.collection("schedule").doc(date));
+    moveAll("schedule", overrides);
+    moveAll("rotation", anchors);
+  }
+  return batch.commit().catch(function (err) { alert("Couldn’t save: " + err.message); });
+}
+
+$("mPushBack").addEventListener("click", function () {
+  var dt = new Date(currentDate + "T12:00:00");
+  var label = dt.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  if (!confirm("No meeting on " + label + "? Everything from then on moves one week later (including saved notes and changes).")) return;
+  $("mStatus").textContent = "Pushing back…";
+  shiftSchedule(currentDate, 1).then(function () { $("overlay").hidden = true; });
 });
 
 /* ---- One-off events ---- */
