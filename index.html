@@ -249,74 +249,6 @@
   #addEventBtn { display: none; }
   body.editing #addEventBtn { display: inline-block; color: var(--event); border-color: var(--event); }
 
-  .tabs {
-    display: flex;
-    justify-content: center;
-    gap: 6px;
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    padding: 4px;
-    margin-bottom: 16px;
-    font-family: 'Helvetica Neue', Arial, sans-serif;
-  }
-  .tabs .tab {
-    flex: 1;
-    font-family: inherit;
-    font-size: 0.85rem;
-    padding: 8px 12px;
-    border: none;
-    border-radius: 999px;
-    background: none;
-    color: var(--muted);
-    cursor: pointer;
-  }
-  .tabs .tab.active {
-    background: var(--accent);
-    color: var(--bg);
-    font-weight: bold;
-  }
-  .prayer-card {
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 18px 20px;
-  }
-  .prayer-card .rt {
-    font-family: 'Helvetica Neue', Arial, sans-serif;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    color: var(--muted);
-    margin-bottom: 2px;
-  }
-  .prayer-card .pc-sub {
-    font-family: 'Helvetica Neue', Arial, sans-serif;
-    font-size: 0.8rem;
-    color: var(--muted);
-    margin-bottom: 12px;
-  }
-  .pc-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 1rem;
-    padding: 7px 0;
-    border-top: 1px solid var(--line);
-  }
-  .pc-row .who { flex: 1; }
-  .pc-row .arrow {
-    font-family: 'Helvetica Neue', Arial, sans-serif;
-    color: var(--accent);
-    flex-shrink: 0;
-  }
-  .pc-row .whom { flex: 1; text-align: right; }
-  .pc-next {
-    font-family: 'Helvetica Neue', Arial, sans-serif;
-    font-size: 0.75rem;
-    color: var(--muted);
-    margin-top: 10px;
-  }
   .rotation {
     background: var(--card);
     border: 1px solid var(--line);
@@ -437,11 +369,6 @@
 
   <div class="banner" id="banner" hidden></div>
 
-  <div class="tabs">
-    <button class="tab active" data-tab="schedule" type="button">Schedule</button>
-    <button class="tab" data-tab="prayer" type="button">Prayer Chain</button>
-  </div>
-
   <div id="view-schedule">
   <div class="toolbar">
     <button id="togglePast" type="button">Show past weeks</button>
@@ -459,20 +386,6 @@
     <p>Not meeting one week? Open that week and tap <strong>Push back a week</strong> &mdash; it becomes &ldquo;no meeting&rdquo; and everything after it slides one week later. Tap the &ldquo;no meeting&rdquo; week again to undo.</p>
     <p>Planning something extra together? While editing, tap <strong>+ Add event</strong> to put a one-off <strong>event</strong> on the schedule &mdash; any day of the week.</p>
   </div>
-  </div>
-
-  <div id="view-prayer" hidden>
-    <div class="prayer-card">
-      <div class="rt">Men&rsquo;s Prayer Chain</div>
-      <div class="pc-sub">Call, check in on &amp; pray for your man this week</div>
-      <div id="prayerRows"></div>
-      <div class="pc-next" id="prayerNext"></div>
-    </div>
-
-    <div class="rotation">
-      <div class="rt">How the chain works</div>
-      <p>Each week every man has <strong>one guy to call</strong> and <strong>one guy calling him</strong>. It rotates every Wednesday night after life group &mdash; over three weeks you&rsquo;ll pray for each of the other guys, then the cycle starts over.</p>
-    </div>
   </div>
 
   <footer>Kicked off August 12, 2026<span id="viewStats"></span> &middot; <a href="#" id="refreshLink">&#8635; Refresh</a></footer>
@@ -554,7 +467,7 @@
    ===================================================================== */
 /* Bump this on every deploy so open pages (and home-screen apps, which have no
    refresh button) notice the new version and reload themselves. */
-var APP_VERSION = "2026-11-24.1";
+var APP_VERSION = "2026-11-28.1";
 
 var firebaseConfig = {
   apiKey: "AIzaSyA6tXNzYmPE0JRXAPJxIM6QBUAlU5XjK34",
@@ -999,30 +912,6 @@ function connect() {
   }
 }
 
-/* ---- Men's prayer chain ----
-   Each man calls & prays for one other; rotates every Wednesday night
-   after life group. The circle shifts by 1, 2, then 3 places over a
-   3-week cycle, so everyone covers all three others, then repeats. */
-function renderPrayerChain() {
-  var MS_WEEK = 7 * 24 * 60 * 60 * 1000;
-  var firstFlip = new Date(START[0], START[1], START[2], 17, 0, 0); // 5 PM on meeting day
-  var now = new Date();
-  var raw = Math.floor((now - firstFlip) / MS_WEEK);
-  var idx = raw < 0 ? 0 : raw;
-  var offset = (idx % 3) + 1;
-  var html = "";
-  for (var i = 0; i < MEN.length; i++) {
-    var to = MEN[(i + offset) % MEN.length];
-    html += '<div class="pc-row"><span class="who">' + esc(MEN[i].n) + '</span>' +
-      '<span class="arrow">prays for &rarr;</span>' +
-      '<span class="whom">' + esc(to.n) + '</span></div>';
-  }
-  $("prayerRows").innerHTML = html;
-  var nextFlip = new Date(firstFlip.getTime() + (raw + 1) * MS_WEEK);
-  $("prayerNext").textContent = "New rotation every Wednesday at 5 PM — next on " +
-    nextFlip.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }) + ".";
-}
-
 /* ---- View counter ----
    Counts every visit, plus visits and unique devices per meeting week.
    A "week" is keyed by its upcoming Wednesday, so "this week" means
@@ -1369,21 +1258,6 @@ $("evDelete").addEventListener("click", function () {
   }).catch(function (err) { $("evStatus").textContent = saveError(err); });
 });
 
-/* ---- Tabs ---- */
-(function () {
-  var tabs = document.querySelectorAll(".tabs .tab");
-  for (var i = 0; i < tabs.length; i++) {
-    tabs[i].addEventListener("click", function () {
-      for (var j = 0; j < tabs.length; j++) tabs[j].classList.remove("active");
-      this.classList.add("active");
-      var t = this.getAttribute("data-tab");
-      $("view-schedule").hidden = t !== "schedule";
-      $("view-prayer").hidden = t !== "prayer";
-      window.scrollTo(0, 0);
-    });
-  }
-})();
-
 /* ---- Past-weeks toggle ---- */
 $("togglePast").addEventListener("click", function () {
   var on = document.body.classList.toggle("show-past");
@@ -1421,7 +1295,6 @@ $("refreshLink").addEventListener("click", function (e) {
 
 /* ---- Go ---- */
 render();
-renderPrayerChain();
 connect();
 var nextEl = document.querySelector(".item.next");
 if (nextEl) nextEl.scrollIntoView({ block: "center" });

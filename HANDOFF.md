@@ -91,13 +91,13 @@ The previous per-collection version is in the Firebase console's rules history (
 
 ## UI features (all in index.html)
 
-- Two tabs: **Schedule** and **Prayer Chain** (segmented control under the header; no emoji on the tab — owner's preference).
+- Single page, no tabs. The Prayer Chain tab was removed at the owner's request on 2026-11-28. A 📖 Sermon Questions button under the title links to austinridge.org/lifegroups/sermon-questions.
 - Schedule list grouped by month; "Next up" badge on the coming Wednesday; auto-scrolls there on load; past weeks hidden with a "Show past weeks" toggle (fully-past month headers hide too).
 - **Edit mode** (✎ button — intentionally **no password**; it was removed on purpose): tap any week → modal with meeting-type select, host dropdown (4 families / "Out somewhere!" / Other… free text), leader dropdown (per-type lists / None / Other…), time, note, cancelled checkbox, and a scope choice: **"Only this week"** (writes `schedule/{date}`) vs **"Shift the rotation from here on"** (writes `rotation/{date}` anchor + any extras). "Reset to default" deletes both docs.
 - Markers: orange dot = one-week edit; ⟳ = rotation shift starts here; "Cancelled" strikes through.
 - **Push back a week** (edit modal button, added 2026-11-24): writes `schedule/X = {skip:true}`. `computeBase()` gives a skipped week no rotation turn, so everything after it lands one week later; `merged()` shows it as "No Meeting". In the same Firestore batch, every one-week edit and rotation shift on or after X moves +7 days, so notes and changes travel with their meeting. Events keep their dates. Tapping the No Meeting week in edit mode offers Undo, which deletes the skip and moves edits after X back −7.
 - **One-off events**: in edit mode a purple "+ Add event" button appears; tapping an event opens its editor with Delete (confirm prompt). Events show a purple left stripe, weekday in the date chip, and a 📍 Directions pill when `place` is set (a family name like "Austin's" maps to that family's address via `placeAddress()`). Past events hide with past weeks; "Next up" stays on meetings only.
-- **Men's Prayer Chain** tab: each man calls/prays for one other; offsets 1→2→3 over a 3-week cycle (week 2 is mutual pairs), so each man covers all three others, then repeats. **Flips Wednesdays at 5:00 PM local** (`firstFlip = START date at 17:00`) so new assignments can be announced at that night's meeting. Pure date math — nothing stored.
+- (Removed 2026-11-28) The men's prayer chain tab used pure date math: offsets 1→2→3 over a 3-week cycle, flipping Wednesdays at 5 PM. To bring it back, see git history before that date.
 - Footer view counter: "N views · N this week (N people)" — "week" is meeting-to-meeting, uniqueness is per-device.
 - Firebase-down / not-configured states degrade gracefully to the computed default schedule with a banner.
 
@@ -118,7 +118,7 @@ The previous per-collection version is in the Firebase console's rules history (
 ## Testing approach used so far
 
 Headless Playwright (Chromium) against `file://` with:
-- `addInitScript` Date-class override to simulate specific dates/times (used to verify the 5 PM prayer flip boundary, past-week hiding, 3-week cycle repeat);
+- `addInitScript` Date-class override to simulate specific dates/times (used to verify past-week hiding and date boundaries);
 - a stubbed `db`/`firebase` object to exercise save paths and the host=lead guard without network;
 - invariant check: walk `computeBase()` and assert zero host/lead family collisions across all 52 weeks after any engine change. **Re-run this check after touching rotation logic.**
 
@@ -126,4 +126,4 @@ Note: the current cloud sandbox **can** reach the Firestore REST API (but not gs
 
 ## Feature backlog (discussed, consciously deferred)
 
-~~One-off events~~ (shipped 2026-10-19), RSVP headcount, snack signup, prayer requests board, fun-week idea voting, add-to-calendar (.ics), PWA/home-screen app feel, 2-year schedule extension, women's prayer chain (5-minute add: mirror `renderPrayerChain` with the WOMEN array). Owner's stated preference: keep it simple, resist scope creep, ship small.
+~~One-off events~~ (shipped 2026-10-19), RSVP headcount, snack signup, prayer requests board, fun-week idea voting, add-to-calendar (.ics), PWA/home-screen app feel, 2-year schedule extension. (A prayer chain existed and was removed 2026-11-28.) Owner's stated preference: keep it simple, resist scope creep, ship small.
